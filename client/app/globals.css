@@ -1003,8 +1003,21 @@ h1 {
   transform: translateX(-50%);
 }
 
+/* Invisible bridge over the gap between trigger and tooltip so the mouse
+   can travel to interactive tooltip content (e.g. the copy button) without
+   the tooltip closing. */
+.info-tooltip > span::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 0;
+  right: 0;
+  height: 10px;
+}
+
 .info-tooltip:hover > span,
-.info-tooltip:focus-visible > span {
+.info-tooltip:focus-visible > span,
+.info-tooltip:focus-within > span {
   visibility: visible;
 }
 
@@ -4629,6 +4642,150 @@ h1 {
   justify-content: flex-end;
   max-width: var(--content-max-width);
   margin-bottom: 16px;
+}
+
+.category-editor {
+  display: grid;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.category-edit-card {
+  padding: 14px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.category-edit-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.category-edit-head input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.category-edit-order {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.category-edit-order .icon-action {
+  min-height: 42px;
+  padding: 0 10px;
+}
+
+.category-edit-order svg {
+  width: 16px;
+  height: 16px;
+}
+
+.source-list {
+  display: grid;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border);
+}
+
+.source-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.source-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.source-row .icon-action {
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+.source-row .icon-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+.source-empty {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.source-add {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.source-add input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+}
+
+.source-add .secondary-button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.color-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.color-row input[type="color"] {
+  flex: 0 0 auto;
+  width: 46px;
+  height: 42px;
+  padding: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.color-row input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  .category-edit-head {
+    flex-wrap: wrap;
+  }
+
+  .source-add {
+    flex-wrap: wrap;
+  }
+
+  .source-add .secondary-button {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 .visually-hidden {

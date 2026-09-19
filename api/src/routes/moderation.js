@@ -3,6 +3,7 @@ import ratelimit from "express-rate-limit";
 import {
   approveTorrentSubmission,
   fetchTorrentSubmission,
+  listMyTorrentSubmissions,
   listTorrentSubmissions,
   notifyTorrentSubmissionDecision,
   rejectTorrentSubmission,
@@ -20,6 +21,7 @@ const limiter = ratelimit({
 
 export default () => {
   router.get("/members", limiter, listMembers);
+  router.get("/my-submissions", limiter, listMyTorrentSubmissions);
   router.get("/torrent-submissions", limiter, listTorrentSubmissions);
   router.get(
     "/torrent-submissions/:submissionId",

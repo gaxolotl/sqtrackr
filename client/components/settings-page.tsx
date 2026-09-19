@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
 import { FormEvent, KeyboardEvent, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-context";
 import { PluginSettings } from "@/components/plugin-settings";
@@ -33,6 +34,7 @@ type AdminSettings = {
   SQ_TORRENT_FILE_MAX_SIZE_KB: number;
   SQ_ALLOW_REGISTER: "open" | "invite" | "closed";
   SQ_ALLOW_ANONYMOUS_UPLOADS: boolean;
+  SQ_TORRENT_PREMODERATION: boolean;
   SQ_MINIMUM_RATIO: number;
   SQ_MAXIMUM_HIT_N_RUNS: number;
   SQ_TORRENT_CATEGORIES: Record<string, string[]>;
@@ -102,6 +104,30 @@ export function SettingsPage() {
   const [activeTab, setActiveTab] = useState<"main" | "plugins">("main");
   const mainTab = useRef<HTMLButtonElement>(null);
   const pluginsTab = useRef<HTMLButtonElement>(null);
+  const [editorSource, setEditorSource] = useState<AdminSettings | null>(null);
+  const [categories, setCategories] = useState<
+    Array<{ name: string; sources: string[] }>
+  >([]);
+  const [blockedExtensions, setBlockedExtensions] = useState<string[]>([]);
+  const [newCategory, setNewCategory] = useState("");
+  const [newSource, setNewSource] = useState<Record<number, string>>({});
+  const [newExtension, setNewExtension] = useState("");
+  const [themeColors, setThemeColors] = useState<Record<string, string> | null>(
+    null,
+  );
+
+  // Sync the editors when fresh settings arrive (initial load or after save).
+  if (settings.data && editorSource !== settings.data) {
+    setEditorSource(settings.data);
+    setCategories(
+      Object.entries(settings.data.SQ_TORRENT_CATEGORIES).map(
+        ([name, sources]) => ({ name, sources: [...sources] }),
+      ),
+    );
+    setBlockedExtensions([...settings.data.SQ_EXTENSION_BLACKLIST]);
+    setThemeColors({ ...settings.data.SQ_CUSTOM_THEME });
+  }
+  const editorsReady = editorSource !== null && themeColors !== null;
 
   function handleTabKey(
     event: KeyboardEvent<HTMLButtonElement>,
@@ -141,12 +167,38 @@ export function SettingsPage() {
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!settings.data) return;
+    if (!editorsReady) {
+      setError("Settings are still loading. Please try again.");
+      return;
+    }
     setSaving(true);
     setError("");
     setMessage("");
     try {
       const form = new FormData(event.currentTarget);
-      const categories = JSON.parse(String(form.get("SQ_TORRENT_CATEGORIES")));
+      const categoryRecord: Record<string, string[]> = {};
+      for (const category of categories) {
+        const name = category.name.trim();
+        if (!name) {
+          setError("Category names cannot be empty.");
+          setSaving(false);
+          return;
+        }
+        if (categoryRecord[name] !== undefined) {
+          setError(`Duplicate category "${name}".`);
+          setSaving(false);
+          return;
+        }
+        const sources = category.sources
+          .map((source) => source.trim())
+          .filter(Boolean);
+        if (new Set(sources).size !== sources.length) {
+          setError(`Sources in category "${name}" must be unique.`);
+          setSaving(false);
+          return;
+        }
+        categoryRecord[name] = sources;
+      }
       const customTheme = Object.fromEntries(
         ["primary", "background", "sidebar", "border", "text", "grey"]
           .map((key) => [key, String(form.get(`theme_${key}`) ?? "").trim()])
@@ -160,13 +212,11 @@ export function SettingsPage() {
           form.get("SQ_ALLOW_REGISTER"),
         ) as AdminSettings["SQ_ALLOW_REGISTER"],
         SQ_SITE_DEFAULT_LOCALE: String(form.get("SQ_SITE_DEFAULT_LOCALE")),
-        SQ_TORRENT_CATEGORIES: categories,
-        SQ_EXTENSION_BLACKLIST: String(form.get("SQ_EXTENSION_BLACKLIST"))
-          .split(",")
-          .map((value) => value.trim().replace(/^\./, ""))
-          .filter(Boolean),
+        SQ_TORRENT_CATEGORIES: categoryRecord,
+        SQ_EXTENSION_BLACKLIST: blockedExtensions,
         SQ_CUSTOM_THEME: customTheme,
         SQ_ALLOW_ANONYMOUS_UPLOADS: form.has("SQ_ALLOW_ANONYMOUS_UPLOADS"),
+        SQ_TORRENT_PREMODERATION: form.has("SQ_TORRENT_PREMODERATION"),
         SQ_SHOW_PAGE_IN_TITLE: form.has("SQ_SHOW_PAGE_IN_TITLE"),
         SQ_CONTENT_CENTERED: form.has("SQ_CONTENT_CENTERED"),
         SQ_SHORTEN_MATCHED_TORRENT_NAMES: form.has(
@@ -182,6 +232,9 @@ export function SettingsPage() {
         body: JSON.stringify(next),
       });
       settings.setData(saved);
+      setNewCategory("");
+      setNewSource({});
+      setNewExtension("");
       updateConfig({
         siteName: saved.SQ_SITE_NAME,
         siteDescription: saved.SQ_SITE_DESCRIPTION,
@@ -203,6 +256,7 @@ export function SettingsPage() {
         },
         allowRegister: saved.SQ_ALLOW_REGISTER,
         allowAnonymousUploads: saved.SQ_ALLOW_ANONYMOUS_UPLOADS,
+        torrentPremoderation: saved.SQ_TORRENT_PREMODERATION,
         categories: saved.SQ_TORRENT_CATEGORIES,
         siteWideFreeleech: saved.SQ_SITE_WIDE_FREELEECH,
         allowUnregisteredView: saved.SQ_ALLOW_UNREGISTERED_VIEW,
@@ -428,6 +482,14 @@ export function SettingsPage() {
                 </label>
                 <label>
                   <input
+                    name="SQ_TORRENT_PREMODERATION"
+                    type="checkbox"
+                    defaultChecked={settings.data.SQ_TORRENT_PREMODERATION}
+                  />{" "}
+                  Require staff approval for user uploads
+                </label>
+                <label>
+                  <input
                     name="SQ_SITE_WIDE_FREELEECH"
                     type="checkbox"
                     defaultChecked={settings.data.SQ_SITE_WIDE_FREELEECH}
@@ -443,24 +505,265 @@ export function SettingsPage() {
                   Public torrent and wiki viewing
                 </label>
               </div>
-              <Field label="Torrent categories (JSON)">
-                <textarea
-                  name="SQ_TORRENT_CATEGORIES"
-                  rows={8}
-                  defaultValue={JSON.stringify(
-                    settings.data.SQ_TORRENT_CATEGORIES,
-                    null,
-                    2,
-                  )}
-                  required
-                />
-              </Field>
-              <Field label="Blocked file extensions (comma separated)">
-                <input
-                  name="SQ_EXTENSION_BLACKLIST"
-                  defaultValue={settings.data.SQ_EXTENSION_BLACKLIST.join(", ")}
-                />
-              </Field>
+              <div className="field">
+                <span>Torrent categories</span>
+                <small>
+                  Categories uploaders pick from, each with its own source
+                  list. Reorder with the arrow buttons.
+                </small>
+                <div className="category-editor">
+                  {categories.map((category, index) => (
+                    <div className="category-edit-card" key={index}>
+                      <div className="category-edit-head">
+                        <input
+                          aria-label={`Category ${index + 1} name`}
+                          value={category.name}
+                          maxLength={60}
+                          onChange={(event) => {
+                            const name = event.target.value;
+                            setCategories((current) =>
+                              current.map((entry, entryIndex) =>
+                                entryIndex === index
+                                  ? { ...entry, name }
+                                  : entry,
+                              ),
+                            );
+                          }}
+                        />
+                        <div className="category-edit-order">
+                          <button
+                            className="icon-action compact-button"
+                            type="button"
+                            disabled={index === 0}
+                            onClick={() =>
+                              setCategories((current) => {
+                                const next = [...current];
+                                [next[index - 1], next[index]] = [
+                                  next[index],
+                                  next[index - 1],
+                                ];
+                                return next;
+                              })
+                            }
+                            aria-label={`Move ${category.name || "category"} up`}
+                          >
+                            <ArrowUp aria-hidden="true" />
+                          </button>
+                          <button
+                            className="icon-action compact-button"
+                            type="button"
+                            disabled={index === categories.length - 1}
+                            onClick={() =>
+                              setCategories((current) => {
+                                const next = [...current];
+                                [next[index + 1], next[index]] = [
+                                  next[index],
+                                  next[index + 1],
+                                ];
+                                return next;
+                              })
+                            }
+                            aria-label={`Move ${category.name || "category"} down`}
+                          >
+                            <ArrowDown aria-hidden="true" />
+                          </button>
+                          <button
+                            className="icon-action compact-button danger-action"
+                            type="button"
+                            onClick={() =>
+                              setCategories((current) =>
+                                current.filter((_, entryIndex) => entryIndex !== index),
+                              )
+                            }
+                            aria-label={`Delete ${category.name || "category"}`}
+                          >
+                            <Trash2 aria-hidden="true" />
+                          </button>
+                        </div>
+                      </div>
+                      {category.sources.length ? (
+                        <ul className="source-list">
+                          {category.sources.map((source, sourceIndex) => (
+                            <li className="source-row" key={sourceIndex}>
+                              <span>{source}</span>
+                              <button
+                                className="icon-action compact-button"
+                                type="button"
+                                onClick={() =>
+                                  setCategories((current) =>
+                                    current.map((entry, entryIndex) =>
+                                      entryIndex === index
+                                        ? {
+                                            ...entry,
+                                            sources: entry.sources.filter(
+                                              (_, candidate) =>
+                                                candidate !== sourceIndex,
+                                            ),
+                                          }
+                                        : entry,
+                                    ),
+                                  )
+                                }
+                                aria-label={`Remove source ${source}`}
+                              >
+                                <X aria-hidden="true" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="source-empty">No sources yet.</p>
+                      )}
+                      <div className="source-add">
+                        <input
+                          aria-label={`New source for ${category.name || "category"}`}
+                          placeholder="New source"
+                          maxLength={60}
+                          value={newSource[index] ?? ""}
+                          onChange={(event) =>
+                            setNewSource((current) => ({
+                              ...current,
+                              [index]: event.target.value,
+                            }))
+                          }
+                          onKeyDown={(event) => {
+                            if (event.key !== "Enter") return;
+                            event.preventDefault();
+                            const value = (newSource[index] ?? "").trim();
+                            if (!value) return;
+                            setCategories((current) =>
+                              current.map((entry, entryIndex) =>
+                                entryIndex === index
+                                  ? { ...entry, sources: [...entry.sources, value] }
+                                  : entry,
+                              ),
+                            );
+                            setNewSource((current) => ({ ...current, [index]: "" }));
+                          }}
+                        />
+                        <button
+                          className="secondary-button compact-button"
+                          type="button"
+                          onClick={() => {
+                            const value = (newSource[index] ?? "").trim();
+                            if (!value) return;
+                            setCategories((current) =>
+                              current.map((entry, entryIndex) =>
+                                entryIndex === index
+                                  ? { ...entry, sources: [...entry.sources, value] }
+                                  : entry,
+                              ),
+                            );
+                            setNewSource((current) => ({ ...current, [index]: "" }));
+                          }}
+                        >
+                          <Plus aria-hidden="true" /> Add source
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="source-add">
+                    <input
+                      aria-label="New category name"
+                      placeholder="New category"
+                      maxLength={60}
+                      value={newCategory}
+                      onChange={(event) => setNewCategory(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter") return;
+                        event.preventDefault();
+                        const value = newCategory.trim();
+                        if (!value) return;
+                        setCategories((current) => [
+                          ...current,
+                          { name: value, sources: [] },
+                        ]);
+                        setNewCategory("");
+                      }}
+                    />
+                    <button
+                      className="secondary-button compact-button"
+                      type="button"
+                      onClick={() => {
+                        const value = newCategory.trim();
+                        if (!value) return;
+                        setCategories((current) => [
+                          ...current,
+                          { name: value, sources: [] },
+                        ]);
+                        setNewCategory("");
+                      }}
+                    >
+                      <Plus aria-hidden="true" /> Add category
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="field">
+                <span>Blocked file extensions</span>
+                <small>
+                  Torrents containing files with these extensions fail to
+                  upload. The leading dot is added automatically.
+                </small>
+                {blockedExtensions.length ? (
+                  <ul className="source-list">
+                    {blockedExtensions.map((extension) => (
+                      <li className="source-row" key={extension}>
+                        <span>.{extension}</span>
+                        <button
+                          className="icon-action compact-button"
+                          type="button"
+                          onClick={() =>
+                            setBlockedExtensions((current) =>
+                              current.filter((candidate) => candidate !== extension),
+                            )
+                          }
+                          aria-label={`Remove blocked extension ${extension}`}
+                        >
+                          <X aria-hidden="true" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="source-empty">No blocked extensions.</p>
+                )}
+                <div className="source-add">
+                  <input
+                    aria-label="New blocked extension"
+                    placeholder="exe"
+                    maxLength={20}
+                    value={newExtension}
+                    onChange={(event) => setNewExtension(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") return;
+                      event.preventDefault();
+                      const value = newExtension
+                        .trim()
+                        .toLowerCase()
+                        .replace(/^\./, "");
+                      if (!value || blockedExtensions.includes(value)) return;
+                      setBlockedExtensions((current) => [...current, value]);
+                      setNewExtension("");
+                    }}
+                  />
+                  <button
+                    className="secondary-button compact-button"
+                    type="button"
+                    onClick={() => {
+                      const value = newExtension
+                        .trim()
+                        .toLowerCase()
+                        .replace(/^\./, "");
+                      if (!value || blockedExtensions.includes(value)) return;
+                      setBlockedExtensions((current) => [...current, value]);
+                      setNewExtension("");
+                    }}
+                  >
+                    <Plus aria-hidden="true" /> Add extension
+                  </button>
+                </div>
+              </div>
             </section>
 
             <section className="account-section">
@@ -548,6 +851,11 @@ export function SettingsPage() {
 
             <section className="account-section">
               <h2>Theme</h2>
+              <p>
+                Pick a colour with the swatch or type a hex value. Only the
+                primary colour is required; leave the rest empty for the
+                default light and dark themes.
+              </p>
               <div className="settings-grid color-settings">
                 {[
                   "primary",
@@ -556,18 +864,45 @@ export function SettingsPage() {
                   "border",
                   "text",
                   "grey",
-                ].map((key) => (
-                  <Field label={key[0].toUpperCase() + key.slice(1)} key={key}>
-                    <input
-                      name={`theme_${key}`}
-                      type="text"
-                      pattern="#[a-fA-F0-9]{6}"
-                      placeholder="#000000"
-                      defaultValue={settings.data!.SQ_CUSTOM_THEME[key] ?? ""}
-                      required={key === "primary"}
-                    />
-                  </Field>
-                ))}
+                ].map((key) => {
+                  const value = themeColors?.[key] ?? "";
+                  const swatch = /^#[a-fA-F0-9]{6}$/.test(value)
+                    ? value
+                    : key === "primary"
+                      ? "#f45d48"
+                      : "#000000";
+                  return (
+                    <Field label={key[0].toUpperCase() + key.slice(1)} key={key}>
+                      <div className="color-row">
+                        <input
+                          type="color"
+                          value={swatch}
+                          onChange={(event) =>
+                            setThemeColors((current) => ({
+                              ...(current ?? {}),
+                              [key]: event.target.value,
+                            }))
+                          }
+                          aria-label={`Pick ${key} colour`}
+                        />
+                        <input
+                          name={`theme_${key}`}
+                          type="text"
+                          pattern="#[a-fA-F0-9]{6}"
+                          placeholder="#000000"
+                          value={value}
+                          onChange={(event) =>
+                            setThemeColors((current) => ({
+                              ...(current ?? {}),
+                              [key]: event.target.value,
+                            }))
+                          }
+                          required={key === "primary"}
+                        />
+                      </div>
+                    </Field>
+                  );
+                })}
               </div>
             </section>
 

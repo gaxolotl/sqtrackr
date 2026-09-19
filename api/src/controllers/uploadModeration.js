@@ -115,6 +115,25 @@ export const listTorrentSubmissions = async (req, res, next) => {
   }
 };
 
+export const listMyTorrentSubmissions = async (req, res, next) => {
+  try {
+    const page = Math.max(parseInt(req.query.page, 10) || 0, 0);
+    const query = { uploadedBy: req.userId };
+    const [items, total] = await Promise.all([
+      TorrentSubmission.find(query)
+        .select("-binary")
+        .sort({ submittedAt: -1 })
+        .skip(page * pageSize)
+        .limit(pageSize)
+        .lean(),
+      TorrentSubmission.countDocuments(query),
+    ]);
+    res.json({ items, total, page, pageSize });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const fetchTorrentSubmission = async (req, res, next) => {
   if (!requireModerator(req, res)) return;
   if (!validSubmissionId(req.params.submissionId, res)) return;

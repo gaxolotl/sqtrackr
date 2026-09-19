@@ -285,11 +285,7 @@ export function ConversationPage({
               </div>
             </header>
 
-            {isSystem ? (
-              <div className="chat-participants">
-                <span>From System · Automated message, replies are disabled</span>
-              </div>
-            ) : (
+            {isSystem ? null : (
               <div className="chat-participants">
                 <span>With</span>
                 {conversation.data.participants.map((participant) => (

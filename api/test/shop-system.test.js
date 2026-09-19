@@ -7,6 +7,8 @@ import { buyItems } from "../src/controllers/user.js";
 import { listMembers } from "../src/controllers/moderation.js";
 import { sendMessage } from "../src/controllers/messages.js";
 import { sendSystemMessage } from "../src/utils/directMessage.js";
+import TorrentSubmission from "../src/schema/torrentSubmission.js";
+import { listMyTorrentSubmissions } from "../src/controllers/uploadModeration.js";
 
 const mockRes = () => {
   const res = {
@@ -163,6 +165,49 @@ test("system notifications use a conflict-free upsert", async () => {
     Conversation.findOneAndUpdate = originalFindOneAndUpdate;
     Conversation.updateOne = originalUpdateOne;
     Message.create = originalCreate;
+  }
+});
+
+test("my submissions are scoped to the requesting uploader", async () => {
+  const originalFind = TorrentSubmission.find;
+  const originalCount = TorrentSubmission.countDocuments;
+  try {
+    let capturedQuery;
+    const chain = {
+      select() {
+        return chain;
+      },
+      sort() {
+        return chain;
+      },
+      skip() {
+        return chain;
+      },
+      limit() {
+        return chain;
+      },
+      lean: async () => [],
+    };
+    TorrentSubmission.find = (query) => {
+      capturedQuery = query;
+      return chain;
+    };
+    TorrentSubmission.countDocuments = async () => 0;
+    const res = mockRes();
+    let nextError;
+    await listMyTorrentSubmissions(
+      { userId: "u1", query: {} },
+      res,
+      (e) => {
+        nextError = e;
+      },
+    );
+    assert.equal(nextError, undefined);
+    assert.deepEqual(capturedQuery, { uploadedBy: "u1" });
+    assert.equal(res.body.total, 0);
+  } finally {
+    TorrentSubmission.find = originalFind;
+    TorrentSubmission.countDocuments = originalCount;
   }
 });
 
