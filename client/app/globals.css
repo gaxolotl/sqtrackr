@@ -4577,6 +4577,75 @@ h1 {
   white-space: nowrap;
 }
 
+.moderation-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  max-width: var(--content-max-width);
+  margin: 0 0 16px;
+}
+
+.moderation-filters label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.moderation-filters select {
+  min-height: 46px;
+  padding: 0 12px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+}
+
+.moderation-member-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.moderation-member-actions select {
+  min-height: 40px;
+  padding: 0 10px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+}
+
+.moderation-embedded {
+  display: grid;
+  gap: 0;
+}
+
+.moderation-embedded-actions {
+  display: flex;
+  justify-content: flex-end;
+  max-width: var(--content-max-width);
+  margin-bottom: 16px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .moderation-filters {
+    grid-template-columns: 1fr;
+  }
+}
+
 .reseed-tabs {
   display: flex;
   gap: 24px;

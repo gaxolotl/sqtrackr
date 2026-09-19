@@ -1,2 +1,2 @@
-import { StatsPage } from "@/components/stats-page";
-export default function Page() { return <StatsPage />; }
+import { ModerationPage } from "@/components/moderation-page";
+export default function Page() { return <ModerationPage initialTab="stats" />; }

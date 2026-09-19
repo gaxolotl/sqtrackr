@@ -15,7 +15,7 @@ import { formatDateTime } from "@/lib/format";
 import { canModerate } from "@/lib/api";
 import type { Report } from "@/lib/types";
 
-export function ReportsPage() {
+export function ReportsPage({ embedded }: { embedded?: boolean }) {
   const { session } = useAuth();
   const [tab, setTab] = useState<"open" | "solved">("open");
   const [search, setSearch] = useState("");
@@ -39,9 +39,9 @@ export function ReportsPage() {
         <SignInRequired />
       </main>
     );
-  return (
-    <main className="page list-page">
-      <PageHeader title="Reports" />
+  const content = (
+    <>
+      {embedded ? null : <PageHeader title="Reports" />}
       <div className="tab-bar" role="tablist" aria-label="Reports">
         <button
           type="button"
@@ -107,6 +107,9 @@ export function ReportsPage() {
           ))}
         </div>
       </ApiState>
-    </main>
+    </>
   );
+
+  if (embedded) return <div className="moderation-embedded">{content}</div>;
+  return <main className="page list-page">{content}</main>;
 }

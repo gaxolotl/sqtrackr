@@ -7,6 +7,7 @@ import {
   notifyTorrentSubmissionDecision,
   rejectTorrentSubmission,
 } from "../controllers/uploadModeration.js";
+import { listMembers } from "../controllers/moderation.js";
 
 const router = express.Router();
 const limiter = ratelimit({
@@ -18,6 +19,7 @@ const limiter = ratelimit({
 });
 
 export default () => {
+  router.get("/members", limiter, listMembers);
   router.get("/torrent-submissions", limiter, listTorrentSubmissions);
   router.get(
     "/torrent-submissions/:submissionId",

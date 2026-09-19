@@ -18,7 +18,7 @@ import { useApiData } from "@/hooks/use-api-data";
 import { apiFetch } from "@/lib/api";
 import type { TrackerStats } from "@/lib/types";
 
-export function StatsPage() {
+export function StatsPage({ embedded }: { embedded?: boolean }) {
   const { session } = useAuth();
   const { data, error, loading, reload } = useApiData<TrackerStats>(
     session?.role === "admin" ? "/admin/stats" : null
@@ -59,24 +59,39 @@ export function StatsPage() {
     : [];
   const isAdmin = session.role === "admin";
 
-  return (
-    <main className="page">
-      <PageHeader
-        title="Stats"
-        actions={
-          isAdmin ? (
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={refreshStats}
-              disabled={refreshing}
-            >
-              <RefreshCw aria-hidden="true" className={refreshing ? "spin" : undefined} />
-              {refreshing ? "Refreshing…" : "Refresh"}
-            </button>
-          ) : undefined
-        }
-      />
+  const content = (
+    <>
+      {embedded ? null : (
+        <PageHeader
+          title="Stats"
+          actions={
+            isAdmin ? (
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={refreshStats}
+                disabled={refreshing}
+              >
+                <RefreshCw aria-hidden="true" className={refreshing ? "spin" : undefined} />
+                {refreshing ? "Refreshing…" : "Refresh"}
+              </button>
+            ) : undefined
+          }
+        />
+      )}
+      {embedded && isAdmin ? (
+        <div className="moderation-embedded-actions">
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={refreshStats}
+            disabled={refreshing}
+          >
+            <RefreshCw aria-hidden="true" className={refreshing ? "spin" : undefined} />
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
+      ) : null}
       {refreshError ? <ActionMessage error={refreshError} /> : null}
       <ApiState
         loading={loading}
@@ -95,6 +110,9 @@ export function StatsPage() {
           ))}
         </section>
       </ApiState>
-    </main>
+    </>
   );
+
+  if (embedded) return <div className="moderation-embedded">{content}</div>;
+  return <main className="page">{content}</main>;
 }

@@ -4,6 +4,7 @@ import User from "../src/schema/user.js";
 import Conversation from "../src/schema/conversation.js";
 import Message from "../src/schema/message.js";
 import { buyItems } from "../src/controllers/user.js";
+import { listMembers } from "../src/controllers/moderation.js";
 import { sendMessage } from "../src/controllers/messages.js";
 import { sendSystemMessage } from "../src/utils/directMessage.js";
 
@@ -107,6 +108,20 @@ test("bonus shop rejects non-integer amounts", async () => {
   );
   assert.equal(nextError, undefined);
   assert.equal(res.statusCode, 400);
+});
+
+test("members list requires admin role", async () => {
+  const res = mockRes();
+  let nextError;
+  await listMembers(
+    { userRole: "staff", query: {} },
+    res,
+    (e) => {
+      nextError = e;
+    },
+  );
+  assert.equal(nextError, undefined);
+  assert.equal(res.statusCode, 403);
 });
 
 test("system notifications use a conflict-free upsert", async () => {

@@ -303,6 +303,58 @@ const computeTrackerStats = async (tracker) => {
   };
 };
 
+export const listMembers = async (req, res, next) => {
+  try {
+    if (req.userRole !== "admin") {
+      res.status(403).send("Only admins can view members");
+      return;
+    }
+    const pageSize = 25;
+    const page = Math.max(parseInt(req.query.page, 10) || 0, 0);
+    const search =
+      typeof req.query.q === "string" ? req.query.q.trim().slice(0, 100) : "";
+    const role =
+      typeof req.query.role === "string" ? req.query.role.trim() : "";
+    const bannedFilter =
+      typeof req.query.banned === "string" ? req.query.banned.trim() : "";
+    const query = {};
+    if (search) {
+      const escaped = String(search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      query.$or = [
+        { username: { $regex: escaped, $options: "i" } },
+        { email: { $regex: escaped, $options: "i" } },
+      ];
+    }
+    if (["user", "staff", "admin"].includes(role)) query.role = role;
+    if (bannedFilter === "banned") query.banned = true;
+    else if (bannedFilter === "active") query.banned = { $ne: true };
+
+    const [items, total] = await Promise.all([
+      User.find(query)
+        .select(
+          "username email role created banned banReason remainingInvites bonusPoints emailVerified",
+        )
+        .sort({ created: -1 })
+        .skip(page * pageSize)
+        .limit(pageSize)
+        .lean(),
+      User.countDocuments(query),
+    ]);
+    res.json({
+      items: items.map((item) => ({
+        ...item,
+        bonusPoints: Number(item.bonusPoints ?? 0),
+        remainingInvites: Number(item.remainingInvites ?? 0),
+      })),
+      total,
+      page,
+      pageSize,
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
 export const getStats = (tracker) => async (req, res, next) => {
   try {
     if (req.userRole !== "admin") {

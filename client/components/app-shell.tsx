@@ -12,7 +12,6 @@ import {
 } from "@/components/i18n-context";
 import clientPackage from "@/package.json";
 import {
-  BarChart3,
   BookOpen,
   ChevronDown,
   CircleUserRound,
@@ -31,9 +30,9 @@ import {
   Puzzle,
   Rss,
   Search,
+  ShieldCheck,
   Settings,
   Sun,
-  TriangleAlert,
   UserPlus,
   Upload,
   X,
@@ -66,14 +65,15 @@ const pageTitleRoutes: Array<[string, MessageKey]> = [
   ["/forum", "forum"],
   ["/login", "login"],
   ["/messages", "messages"],
+  ["/moderation", "moderation"],
   ["/register", "register"],
-  ["/reports", "reports"],
+  ["/reports", "moderation"],
   ["/requests", "requests"],
   ["/reset-password", "login"],
   ["/rss", "rss"],
   ["/search", "search"],
   ["/settings", "settings"],
-  ["/stats", "stats"],
+  ["/stats", "moderation"],
   ["/tags", "browse"],
   ["/torrent", "torrent"],
   ["/upload", "upload"],
@@ -164,13 +164,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     session
       ? [
           ...(canModerate(session.role)
-            ? [{ label: t("reports"), href: "/reports", icon: TriangleAlert }]
+            ? [
+                {
+                  label: t("moderation"),
+                  href: "/moderation",
+                  icon: ShieldCheck,
+                },
+              ]
             : []),
           ...(session.role === "admin"
-            ? [
-                { label: t("stats"), href: "/stats", icon: BarChart3 },
-                { label: t("settings"), href: "/settings", icon: Settings },
-              ]
+            ? [{ label: t("settings"), href: "/settings", icon: Settings }]
             : []),
         ]
       : [

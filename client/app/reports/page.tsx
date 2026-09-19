@@ -1,2 +1,2 @@
-import { ReportsPage } from "@/components/reports-page";
-export default function Page() { return <ReportsPage />; }
+import { ModerationPage } from "@/components/moderation-page";
+export default function Page() { return <ModerationPage initialTab="reports" />; }
