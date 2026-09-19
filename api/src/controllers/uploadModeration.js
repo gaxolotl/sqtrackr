@@ -8,7 +8,7 @@ import {
   getContentLimits,
   validateContentText,
 } from "../utils/contentLimits.js";
-import { sendDirectMessage } from "../utils/directMessage.js";
+import { sendSystemMessage } from "../utils/directMessage.js";
 import { canModerate } from "../utils/roles.js";
 
 const pageSize = 25;
@@ -55,23 +55,13 @@ const addUserRefs = async (submissions, { showAnonymousUploader = false } = {}) 
   }));
 };
 
-const notifyDecision = async (submission, reviewerId) => {
+const notifyDecision = async (submission) => {
   if (submission.notifiedAt) return;
   const approved = submission.status === "approved";
   const body = approved
     ? `Your upload "${submission.name}" was approved.\n\nView it at /torrent/${submission.infoHash}`
     : `Your upload "${submission.name}" was rejected.\n\nReason: ${submission.rejectionReason}`;
-  let senderId = reviewerId;
-  if (submission.anonymous) {
-    const admin = await User.findOne({ role: "admin" }, { _id: 1 }).lean();
-    if (!admin)
-      throw new Error(
-        "Cannot notify an anonymous uploader without an admin account",
-      );
-    senderId = admin._id;
-  }
-  await sendDirectMessage({
-    senderId,
+  await sendSystemMessage({
     recipientId: submission.uploadedBy,
     body,
     notificationKey: `torrent-submission:${submission._id}:${submission.status}`,
@@ -164,7 +154,7 @@ export const approveTorrentSubmission = async (req, res, next) => {
       return;
     }
     if (submission.status === "approved") {
-      await notifyDecision(submission, submission.reviewedBy || req.userId);
+      await notifyDecision(submission);
       res.json({ infoHash: submission.infoHash, status: submission.status });
       return;
     }
@@ -326,7 +316,7 @@ export const approveTorrentSubmission = async (req, res, next) => {
       res.status(409).send("Submission approval lease expired");
       return;
     }
-    await notifyDecision(submission, submission.reviewedBy);
+    await notifyDecision(submission);
     res.json({ infoHash: submission.infoHash, status: submission.status });
   } catch (error) {
     if (approvalToken) {
@@ -406,7 +396,7 @@ export const rejectTorrentSubmission = async (req, res, next) => {
         res.status(409).send("Submission is already being reviewed");
         return;
       }
-      await notifyDecision(submission, submission.reviewedBy || req.userId);
+      await notifyDecision(submission);
       res.json({ infoHash: submission.infoHash, status: submission.status });
       return;
     }
@@ -429,7 +419,7 @@ export const rejectTorrentSubmission = async (req, res, next) => {
         return;
       }
     }
-    await notifyDecision(submission, submission.reviewedBy || req.userId);
+    await notifyDecision(submission);
     res.json({ infoHash: submission.infoHash, status: submission.status });
   } catch (error) {
     next(error);
@@ -453,7 +443,7 @@ export const notifyTorrentSubmissionDecision = async (req, res, next) => {
       res.status(409).send("A decision has not been made yet");
       return;
     }
-    await notifyDecision(submission, submission.reviewedBy || req.userId);
+    await notifyDecision(submission);
     res.sendStatus(200);
   } catch (error) {
     next(error);

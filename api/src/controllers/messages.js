@@ -347,7 +347,7 @@ export const getConversation = async (req, res, next) => {
       participants: req.userId,
       archivedBy: { $ne: req.userId },
     })
-      .select("participants createdBy created subject")
+      .select("participants createdBy created subject system readOnly")
       .populate({
         path: "participants",
         select: "username avatarUpdated",
@@ -394,7 +394,7 @@ export const getMessages = async (req, res, next) => {
       .sort({ created: 1, _id: 1 })
       .skip(page * pageSize)
       .limit(pageSize)
-      .select("sender body created readBy")
+      .select("sender body created readBy system")
       .populate({
         path: "sender",
         select: "username avatarUpdated",
@@ -423,6 +423,11 @@ export const sendMessage = async (req, res, next) => {
       res.status(404).send("Conversation does not exist");
       return;
     }
+    if (conversation.system || conversation.readOnly) {
+      res.status(403).send("System messages cannot be replied to");
+      return;
+    }
+
     const created = Date.now();
     const message = new Message({
       conversation: conversation._id,
@@ -499,6 +504,10 @@ export const addParticipants = async (req, res, next) => {
     const conversation = await Conversation.findById(conversationId);
     if (!conversation) {
       res.status(404).send("Conversation does not exist");
+      return;
+    }
+    if (conversation.system || conversation.readOnly) {
+      res.status(403).send("System conversations cannot be modified");
       return;
     }
     if (conversation.createdBy?.toString() !== req.userId.toString()) {

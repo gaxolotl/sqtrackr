@@ -836,7 +836,7 @@ export const getUserStats = async (req, res, next) => {
     const ratioStats = await getUserRatio(user._id);
     const hitnruns = await getUserHitNRuns(user._id);
 
-    res.json({ ...ratioStats, bp: user.bonusPoints, hitnruns });
+    res.json({ ...ratioStats, bp: Number(user.bonusPoints ?? 0), hitnruns });
   } catch (e) {
     next(e);
   }
@@ -942,78 +942,103 @@ export const banUser = async (req, res, next) => {
 };
 
 export const buyItems = async (req, res, next) => {
-  if (req.body.type && req.body.amount) {
+  if (req.body.type && req.body.amount !== undefined) {
     try {
-      const amount = parseInt(req.body.amount);
+      const amount = Number(req.body.amount);
 
-      if (amount < 1) {
-        res.status(400).send("Amount must be a number >=1");
+      if (!Number.isInteger(amount) || amount < 1 || amount > 1000) {
+        res.status(400).send("Amount must be an integer between 1 and 1000");
         return;
       }
 
       const user = await User.findOne({ _id: req.userId }).lean();
+      if (!user) {
+        res.status(404).send("User does not exist");
+        return;
+      }
+      const balance = Number(user.bonusPoints ?? 0);
 
       if (req.body.type === "invite") {
-        if (process.env.SQ_BP_COST_PER_INVITE === 0) {
+        const unitCost = Number(process.env.SQ_BP_COST_PER_INVITE ?? 0);
+        if (!Number.isFinite(unitCost) || unitCost <= 0) {
           res.status(403).send("Not available to buy");
           return;
         }
 
-        const cost = amount * process.env.SQ_BP_COST_PER_INVITE;
-        if (cost > user.bonusPoints) {
+        const cost = amount * unitCost;
+        if (cost > balance) {
           res.status(403).send("Not enough points for transaction");
           return;
         }
 
-        await User.findOneAndUpdate(
-          { _id: req.userId },
+        const updated = await User.findOneAndUpdate(
+          { _id: req.userId, bonusPoints: { $gte: cost } },
           {
             $inc: {
               remainingInvites: amount,
               bonusPoints: cost * -1,
             },
           },
-        );
-
-        res.status(200).send((user.bonusPoints - cost).toString());
-      } else if (req.body.type === "upload") {
-        if (process.env.SQ_BP_COST_PER_GB === 0) {
-          res.status(403).send("Not available to buy");
-          return;
-        }
-
-        const cost = amount * process.env.SQ_BP_COST_PER_GB;
-        if (cost > user.bonusPoints) {
+          { new: true },
+        ).lean();
+        if (!updated) {
           res.status(403).send("Not enough points for transaction");
           return;
         }
 
-        await User.findOneAndUpdate(
-          { _id: req.userId },
+        res.status(200).send(Number(updated.bonusPoints ?? 0).toString());
+      } else if (req.body.type === "upload") {
+        const unitCost = Number(process.env.SQ_BP_COST_PER_GB ?? 0);
+        if (!Number.isFinite(unitCost) || unitCost <= 0) {
+          res.status(403).send("Not available to buy");
+          return;
+        }
+
+        const cost = amount * unitCost;
+        if (cost > balance) {
+          res.status(403).send("Not enough points for transaction");
+          return;
+        }
+
+        const updated = await User.findOneAndUpdate(
+          { _id: req.userId, bonusPoints: { $gte: cost } },
           {
             $inc: {
               bonusPoints: cost * -1,
             },
           },
-        );
+          { new: true },
+        ).lean();
+        if (!updated) {
+          res.status(403).send("Not enough points for transaction");
+          return;
+        }
 
-        const progressRecord = new Progress({
-          infoHash: `purchase-${Date.now()}`,
-          userId: req.userId,
-          uploaded: {
-            session: BYTES_GB * amount,
-            total: BYTES_GB * amount,
-          },
-          downloaded: {
-            session: 0,
-            total: 0,
-          },
-          left: 0,
-        });
+        try {
+          const progressRecord = new Progress({
+            infoHash: `purchase-${Date.now()}`,
+            userId: req.userId,
+            uploaded: {
+              session: BYTES_GB * amount,
+              total: BYTES_GB * amount,
+            },
+            downloaded: {
+              session: 0,
+              total: 0,
+            },
+            left: 0,
+          });
 
-        await progressRecord.save();
+          await progressRecord.save();
+        } catch (progressError) {
+          await User.findOneAndUpdate(
+            { _id: req.userId },
+            { $inc: { bonusPoints: cost } },
+          ).catch(() => {});
+          throw progressError;
+        }
 
-        res.status(200).send((user.bonusPoints - cost).toString());
+        res.status(200).send(Number(updated.bonusPoints ?? 0).toString());
       } else {
         res.status(400).send("Type must be one of invite, upload");
         return;

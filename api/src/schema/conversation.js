@@ -11,6 +11,8 @@ const Conversation = new mongoose.Schema({
   createdBy: mongoose.Schema.ObjectId,
   created: Number,
   subject: String,
+  system: { type: Boolean, default: false },
+  readOnly: { type: Boolean, default: false },
   directKey: String,
   archivedBy: [mongoose.Schema.ObjectId],
   lastMessage: {

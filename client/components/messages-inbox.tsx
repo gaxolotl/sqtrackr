@@ -37,6 +37,9 @@ export function MessagesInbox() {
   const currentUsername = session.username;
 
   function conversationTitle(conversation: Conversation) {
+    if (conversation.system) {
+      return conversation.subject?.trim() || "System";
+    }
     const otherParticipants = conversation.participants.filter(
       (participant) =>
         participant._id !== currentUserId &&
@@ -107,7 +110,11 @@ export function MessagesInbox() {
                         {lastMessage ? (
                           <>
                             <strong>
-                              {lastMessage.userId?.username ?? "Unknown user"}:
+                              {conversation.system
+                                ? "System"
+                                : (lastMessage.userId?.username ??
+                                  "Unknown user")}
+                              :
                             </strong>{" "}
                             {truncateMessage(lastMessage.body)}
                           </>

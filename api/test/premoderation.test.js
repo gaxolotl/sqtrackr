@@ -157,7 +157,8 @@ test("approval publishes a pending submission and notifies its uploader", async 
     });
     assert.equal(published.submission, submission._id);
     assert.equal(published.infoHash, submission.infoHash);
-    assert.equal(sentMessage.sender, "507f191e810c19729de860ec");
+    assert.equal(sentMessage.sender, undefined);
+    assert.equal(sentMessage.system, true);
     assert.equal(sentMessage.body.includes("was approved"), true);
   } finally {
     TorrentSubmission.findById = originals.submissionFindById;

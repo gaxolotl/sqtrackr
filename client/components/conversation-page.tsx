@@ -204,11 +204,15 @@ export function ConversationPage({
         participant._id !== session.id &&
         participant.username !== session.username,
     ) ?? [];
-  const title =
-    conversation.data?.subject?.trim() ||
-    otherParticipants.map((participant) => participant.username).join(", ") ||
-    "Conversation";
-  const isCreator = conversation.data?.createdBy === session.id;
+  const isSystem = Boolean(conversation.data?.system);
+  const isReadOnly = Boolean(conversation.data?.readOnly) || isSystem;
+  const title = isSystem
+    ? conversation.data?.subject?.trim() || "System"
+    : conversation.data?.subject?.trim() ||
+      otherParticipants.map((participant) => participant.username).join(", ") ||
+      "Conversation";
+  const isCreator =
+    !isSystem && conversation.data?.createdBy === session.id;
   const isGroup = (conversation.data?.participants.length ?? 0) > 2;
 
   return (
@@ -281,17 +285,23 @@ export function ConversationPage({
               </div>
             </header>
 
-            <div className="chat-participants">
-              <span>With</span>
-              {conversation.data.participants.map((participant) => (
-                <Link
-                  href={`/user/${encodeURIComponent(participant.username)}`}
-                  key={participant._id ?? participant.username}
-                >
-                  {participant.username}
-                </Link>
-              ))}
-            </div>
+            {isSystem ? (
+              <div className="chat-participants">
+                <span>From System · Automated message, replies are disabled</span>
+              </div>
+            ) : (
+              <div className="chat-participants">
+                <span>With</span>
+                {conversation.data.participants.map((participant) => (
+                  <Link
+                    href={`/user/${encodeURIComponent(participant.username)}`}
+                    key={participant._id ?? participant.username}
+                  >
+                    {participant.username}
+                  </Link>
+                ))}
+              </div>
+            )}
 
             {isCreator && addingPeople ? (
               <form className="chat-add-people" onSubmit={addParticipants}>
@@ -325,8 +335,9 @@ export function ConversationPage({
                 <div className="chat-messages">
                   {messagePage.data?.messages.map((message) => {
                     const isOwnMessage = message.sender?._id === session.id;
-                    const senderName =
-                      message.sender?.username ?? "Unknown user";
+                    const senderName = message.system
+                      ? "System"
+                      : (message.sender?.username ?? "Unknown user");
                     return (
                       <article
                         className={`chat-message${isOwnMessage ? " chat-message-own" : ""}`}
@@ -337,6 +348,7 @@ export function ConversationPage({
                           <UserAvatar
                             username={message.sender?.username}
                             avatarUpdated={message.sender?.avatarUpdated}
+                            fallback={message.system ? "S" : undefined}
                             className="chat-message-avatar"
                             size={34}
                           />
@@ -388,25 +400,31 @@ export function ConversationPage({
               </ApiState>
             </section>
 
-            <form className="chat-composer" onSubmit={sendMessage}>
-              <Field label="Reply">
-                <textarea
-                  name="body"
-                  rows={2}
-                  required
-                  maxLength={Math.min(config.contentLimits.message, 50000)}
-                  placeholder="Write a message…"
-                />
-              </Field>
-              <button
-                className="primary-button"
-                type="submit"
-                disabled={submitting}
-                aria-label="Send message"
-              >
-                <Send aria-hidden="true" />
-              </button>
-            </form>
+            {isReadOnly ? (
+              <div className="state-panel">
+                This is an automated system message and cannot be replied to.
+              </div>
+            ) : (
+              <form className="chat-composer" onSubmit={sendMessage}>
+                <Field label="Reply">
+                  <textarea
+                    name="body"
+                    rows={2}
+                    required
+                    maxLength={Math.min(config.contentLimits.message, 50000)}
+                    placeholder="Write a message…"
+                  />
+                </Field>
+                <button
+                  className="primary-button"
+                  type="submit"
+                  disabled={submitting}
+                  aria-label="Send message"
+                >
+                  <Send aria-hidden="true" />
+                </button>
+              </form>
+            )}
           </div>
         ) : null}
       </ApiState>
