@@ -7,6 +7,7 @@ const { createNGrams, nGrams } = fuzzyHelpers;
 import slugify from "slugify";
 import contentDisposition from "content-disposition";
 import Torrent from "../schema/torrent.js";
+import TorrentSubmission from "../schema/torrentSubmission.js";
 import User from "../schema/user.js";
 import Comment from "../schema/comment.js";
 import Group from "../schema/group.js";
@@ -25,6 +26,7 @@ import {
   validateContentText,
 } from "../utils/contentLimits.js";
 import pluginEvents from "../plugins/eventBus.js";
+import { shouldPremoderateUpload } from "../utils/premoderation.js";
 
 const getTorrentCategories = () =>
   JSON.parse(process.env.SQ_TORRENT_CATEGORIES || "{}");
@@ -256,6 +258,16 @@ export const uploadTorrent = async (req, res, next) => {
         res.status(409).send("Torrent with this info hash already exists");
         return;
       }
+      const existingSubmission = await TorrentSubmission.findOne({
+        infoHash,
+        status: { $in: ["pending", "approving"] },
+      }).lean();
+      if (existingSubmission) {
+        res
+          .status(409)
+          .send("Torrent with this info hash is already awaiting review");
+        return;
+      }
 
       let files;
       if (parsed.info.files) {
@@ -283,7 +295,7 @@ export const uploadTorrent = async (req, res, next) => {
         return;
       }
 
-      let groupId;
+      let groupWithTorrent;
 
       if (req.body.groupWith) {
         const groupWith = req.body.groupWith;
@@ -293,7 +305,7 @@ export const uploadTorrent = async (req, res, next) => {
           return;
         }
 
-        const groupWithTorrent = await Torrent.findOne({
+        groupWithTorrent = await Torrent.findOne({
           infoHash: groupWith,
         }).lean();
 
@@ -301,15 +313,9 @@ export const uploadTorrent = async (req, res, next) => {
           res.status(400).send("Cannot group with torrent that does not exist");
           return;
         }
-
-        groupId = groupWithTorrent.group;
-
-        if (!groupId) {
-          groupId = await createGroup([groupWithTorrent]);
-        }
       }
 
-      const newTorrent = new Torrent({
+      const torrentData = {
         name,
         description,
         type: req.body.type,
@@ -332,16 +338,86 @@ export const uploadTorrent = async (req, res, next) => {
         downvotes: [],
         freeleech: false,
         tags,
-        group: groupId,
         mediaInfo: mediaInfo || undefined,
         tmdb,
+      };
+
+      const requiresReview = shouldPremoderateUpload({
+        enabled: envFlag("SQ_TORRENT_PREMODERATION"),
+        role: req.userRole,
       });
-      await newTorrent.save();
+      let submission = null;
+      try {
+        submission = await TorrentSubmission.create({
+          ...torrentData,
+          groupWith: groupWithTorrent?.infoHash,
+          submittedAt: torrentData.created,
+          status: requiresReview ? "pending" : "approving",
+          requiresReview,
+          reviewedBy: requiresReview ? undefined : req.userId,
+        });
+      } catch (createError) {
+        if (createError?.code === 11000) {
+          res
+            .status(409)
+            .send(
+              "Torrent with this info hash already exists or is awaiting review",
+            );
+          return;
+        }
+        throw createError;
+      }
 
-      if (groupId) await addToGroup(groupId, infoHash);
+      if (requiresReview) {
+        res.status(202).json({
+          infoHash,
+          status: "pending",
+          submissionId: submission._id,
+        });
+        return;
+      }
 
-      res.status(200).send(infoHash);
+      try {
+        let groupId = groupWithTorrent?.group;
+        if (groupWithTorrent && !groupId) {
+          groupId = await createGroup([groupWithTorrent]);
+        }
+        const newTorrent = new Torrent({
+          ...torrentData,
+          group: groupId,
+          submission: submission._id,
+        });
+        await newTorrent.save();
+
+        if (groupId) await addToGroup(groupId, infoHash);
+
+        await TorrentSubmission.findByIdAndUpdate(submission._id, {
+          $set: {
+            status: "approved",
+            reviewedAt: Date.now(),
+            torrent: newTorrent._id,
+          },
+          $unset: { binary: 1 },
+        });
+
+        res.status(200).json({ infoHash, status: "approved" });
+      } catch (publishError) {
+        if (submission?._id) {
+          await TorrentSubmission.deleteOne({ _id: submission._id }).catch(
+            () => {},
+          );
+        }
+        throw publishError;
+      }
     } catch (e) {
+      if (e?.code === 11000) {
+        res
+          .status(409)
+          .send(
+            "Torrent with this info hash already exists or is awaiting review",
+          );
+        return;
+      }
       next(e);
     }
   } else {

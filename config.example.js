@@ -54,6 +54,10 @@ module.exports = {
     // Admins can still see who uploaded anonymously, but other users cannot.
     SQ_ALLOW_ANONYMOUS_UPLOADS: false,
 
+    // Require ordinary user uploads to be approved by staff before publication.
+    // Staff and admin uploads are published immediately.
+    SQ_TORRENT_PREMODERATION: false,
+
     // Minimum allowed ratio. Below this users will not be able to download. Set to -1 to disable.
     SQ_MINIMUM_RATIO: 0.75,
 

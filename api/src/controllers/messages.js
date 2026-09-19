@@ -3,6 +3,7 @@ import Conversation from "../schema/conversation.js";
 import Message from "../schema/message.js";
 import User from "../schema/user.js";
 import { getContentLimits } from "../utils/contentLimits.js";
+import { sendDirectMessage } from "../utils/directMessage.js";
 
 const parsePage = (value) => Math.max(parseInt(value, 10) || 0, 0);
 
@@ -292,40 +293,27 @@ export const createConversation = async (req, res, next) => {
 
     const created = Date.now();
     const participantIds = [req.userId, ...users.map((user) => user._id)];
+    if (participantIds.length === 2) {
+      const conversationId = await sendDirectMessage({
+        senderId: req.userId,
+        recipientId: users[0]._id,
+        body,
+      });
+      res.send({ conversationId });
+      return;
+    }
     const participantSince = participantIds.map((userId) => ({
       userId,
       created,
     }));
-    let conversation;
-    if (participantIds.length === 2) {
-      const directKey = participantIds
-        .map((participant) => participant.toString())
-        .sort()
-        .join(":");
-      conversation = await Conversation.findOneAndUpdate(
-        { directKey },
-        {
-          $setOnInsert: {
-            participants: participantIds,
-            participantSince,
-            createdBy: req.userId,
-            created,
-            archivedBy: [],
-            directKey,
-          },
-        },
-        { new: true, upsert: true },
-      );
-    } else {
-      conversation = new Conversation({
-        participants: participantIds,
-        participantSince,
-        createdBy: req.userId,
-        created,
-        archivedBy: [],
-        ...(subject ? { subject } : {}),
-      });
-    }
+    const conversation = new Conversation({
+      participants: participantIds,
+      participantSince,
+      createdBy: req.userId,
+      created,
+      archivedBy: [],
+      ...(subject ? { subject } : {}),
+    });
 
     const message = new Message({
       conversation: conversation._id,
@@ -435,7 +423,6 @@ export const sendMessage = async (req, res, next) => {
       res.status(404).send("Conversation does not exist");
       return;
     }
-
     const created = Date.now();
     const message = new Message({
       conversation: conversation._id,

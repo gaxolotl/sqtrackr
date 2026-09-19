@@ -26,6 +26,7 @@ export const runtimeSettingsSchema = yup
       .oneOf(["open", "invite", "closed"])
       .required(),
     SQ_ALLOW_ANONYMOUS_UPLOADS: yup.boolean().required(),
+    SQ_TORRENT_PREMODERATION: yup.boolean().required(),
     SQ_MINIMUM_RATIO: yup.number().min(-1).max(100).required(),
     SQ_MAXIMUM_HIT_N_RUNS: yup.number().integer().min(-1).max(10000).required(),
     SQ_TORRENT_CATEGORIES: yup.object().required(),
@@ -76,6 +77,7 @@ const booleanKeys = new Set([
   "SQ_CONTENT_CENTERED",
   "SQ_SHORTEN_MATCHED_TORRENT_NAMES",
   "SQ_ALLOW_ANONYMOUS_UPLOADS",
+  "SQ_TORRENT_PREMODERATION",
   "SQ_SITE_WIDE_FREELEECH",
   "SQ_ALLOW_UNREGISTERED_VIEW",
   "SQ_ALLOW_GIF_AVATARS",
@@ -120,6 +122,7 @@ const fallbackValues = {
   SQ_MEDIA_INFO_MAX_LENGTH: "100000",
   SQ_TORRENT_TAGS_MAX_LENGTH: "500",
   SQ_TORRENT_FILE_MAX_SIZE_KB: "1024",
+  SQ_TORRENT_PREMODERATION: "false",
 };
 
 const parseEnvironmentValue = (key, value) => {

@@ -6,6 +6,8 @@ const Message = new mongoose.Schema({
   body: String,
   created: Number,
   readBy: [mongoose.Schema.ObjectId],
+  system: { type: Boolean, default: false },
+  notificationKey: { type: String, unique: true, sparse: true },
 });
 
 Message.index({ conversation: 1, created: 1 });

@@ -95,6 +95,7 @@ export function UploadPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [category, setCategory] = useState("");
@@ -212,10 +213,15 @@ export function UploadPage() {
     }
     setSubmitting(true);
     setError("");
-    const form = new FormData(event.currentTarget);
+    setMessage("");
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       const payload = torrentPayload || (await fileToBase64(file));
-      const result = await apiFetch<string | { infoHash?: string }>(
+      const result = await apiFetch<{
+        infoHash: string;
+        status: "pending" | "approved";
+      }>(
         "/torrent/upload",
         {
           method: "POST",
@@ -238,8 +244,22 @@ export function UploadPage() {
           }),
         },
       );
-      const infoHash = typeof result === "string" ? result : result.infoHash;
-      router.push(infoHash ? `/torrent/${infoHash}` : "/");
+      if (result.status === "pending") {
+        formElement.reset();
+        setFile(null);
+        setTorrentPayload("");
+        setName("");
+        setDescription("");
+        setCategory("");
+        setMetadata(null);
+        setMetadataQuery("");
+        setMetadataError("");
+        setSelectedMetadata(null);
+        setShowMetadataChoices(false);
+        setMessage("Upload submitted for staff review.");
+      } else {
+        router.push(`/torrent/${result.infoHash}`);
+      }
     } catch (requestError) {
       setError(
         requestError instanceof Error ? requestError.message : "Upload failed.",
@@ -256,6 +276,10 @@ export function UploadPage() {
       </main>
     );
   const announceUrl = `${config.trackerUrl || apiOrigin()}/announce/${session.uid}`;
+  const requiresReview =
+    config.torrentPremoderation &&
+    session.role !== "staff" &&
+    session.role !== "admin";
   const confirmedAutomaticMatch =
     selectedMetadata &&
     selectedMetadata !== "none" &&
@@ -283,6 +307,18 @@ export function UploadPage() {
   return (
     <main className="page form-page">
       <PageHeader title="Upload" />
+      {requiresReview ? (
+        <div className="upload-review-notice">
+          <Info aria-hidden="true" />
+          <div>
+            <strong>Staff review is required</strong>
+            <span>
+              Your torrent will stay private until a moderator approves it. You
+              will receive a message when a decision is made.
+            </span>
+          </div>
+        </div>
+      ) : null}
       <p className="announce-hint">
         <Link2 aria-hidden="true" />
         <span>
@@ -550,7 +586,7 @@ export function UploadPage() {
             <input name="anonymous" type="checkbox" /> Upload anonymously
           </label>
         ) : null}
-        <ActionMessage error={error} />
+        <ActionMessage message={message} error={error} />
         <div className="form-actions">
           <button
             className="primary-button"
@@ -561,7 +597,9 @@ export function UploadPage() {
               ? "Uploading…"
               : identifying
                 ? "Identifying…"
-                : "Upload"}
+                : requiresReview
+                  ? "Submit for review"
+                  : "Upload"}
           </button>
         </div>
       </form>

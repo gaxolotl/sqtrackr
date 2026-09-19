@@ -21,6 +21,7 @@ export const FALLBACK_TRACKER_CONFIG: TrackerConfig = {
   },
   allowRegister: "open",
   allowAnonymousUploads: false,
+  torrentPremoderation: false,
   categories: {
     Movies: ["BluRay", "WebDL", "HDRip", "WebRip", "DVD", "Cam"],
     TV: [],

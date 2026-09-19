@@ -109,6 +109,44 @@ export type Torrent = {
   tmdb?: TorrentMetadata;
 };
 
+export type TorrentSubmissionStatus =
+  | "pending"
+  | "approving"
+  | "approved"
+  | "rejected";
+
+export type TorrentSubmission = {
+  _id: string;
+  infoHash: string;
+  name: string;
+  description?: string;
+  type?: string;
+  source?: string;
+  poster?: string;
+  uploadedBy?: UserRef;
+  anonymous?: boolean;
+  size?: number;
+  files?: Torrent["files"];
+  tags?: string[];
+  groupWith?: string;
+  mediaInfo?: string;
+  tmdb?: TorrentMetadata;
+  status: TorrentSubmissionStatus;
+  submittedAt: number;
+  reviewedAt?: number;
+  reviewedBy?: UserRef;
+  rejectionReason?: string;
+  torrent?: string;
+  notifiedAt?: number;
+};
+
+export type TorrentSubmissionPage = {
+  items: TorrentSubmission[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 export type UserProfile = {
   _id: string;
   username: string;
@@ -218,6 +256,7 @@ export type TrackerConfig = {
   contentLimits: ContentLimits;
   allowRegister: "open" | "invite" | "closed";
   allowAnonymousUploads: boolean;
+  torrentPremoderation: boolean;
   categories: Record<string, string[]>;
   siteWideFreeleech: boolean;
   allowUnregisteredView: boolean;
@@ -311,6 +350,7 @@ export type DirectMessage = {
   body: string;
   created: number;
   readBy: string[];
+  system?: boolean;
 };
 
 export type Conversation = {
@@ -319,6 +359,8 @@ export type Conversation = {
   createdBy: string;
   created: number;
   subject?: string;
+  system?: boolean;
+  readOnly?: boolean;
   lastMessage?: {
     userId?: UserRef;
     body: string;

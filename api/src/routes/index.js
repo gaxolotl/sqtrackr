@@ -9,6 +9,7 @@ import groupRoutes from "./group.js";
 import wikiRoutes from "./wiki.js";
 import forumRoutes from "./forum.js";
 import messageRoutes from "./messages.js";
+import moderationRoutes from "./moderation.js";
 
 export {
   accountRoutes,
@@ -22,4 +23,5 @@ export {
   wikiRoutes,
   forumRoutes,
   messageRoutes,
+  moderationRoutes,
 };

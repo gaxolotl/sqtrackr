@@ -39,6 +39,7 @@ It implements all of the features required to run a private (or public) tracker 
   * Private one-to-one and group conversations with unread tracking
 * Moderation
   * Staff / admin privileges
+  * Optional premoderation queue for user uploads with retained decisions and private-message notifications
   * Reporting torrents to be reviewed by staff
   * Detailed stats available to admins
   * Runtime-safe site settings available to admins without a service restart
@@ -57,7 +58,6 @@ It implements all of the features required to run a private (or public) tracker 
 
 The roadmap is still being expanded.
 
-* Premoderation option
 * Anti-cheat
 
 ## Quick Start

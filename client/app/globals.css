@@ -4447,6 +4447,136 @@ h1 {
   border-color: var(--accent);
 }
 
+.upload-review-notice {
+  display: flex;
+  max-width: var(--content-max-width);
+  align-items: flex-start;
+  gap: 13px;
+  margin-bottom: 22px;
+  padding: 15px 17px;
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+}
+
+.upload-review-notice > svg {
+  flex: 0 0 auto;
+  width: 20px;
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.upload-review-notice div {
+  display: grid;
+  gap: 3px;
+}
+
+.upload-review-notice span {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.moderation-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.moderation-status svg {
+  width: 15px;
+  height: 15px;
+}
+
+.moderation-status-approved {
+  background: color-mix(in srgb, var(--success) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--success) 42%, var(--border));
+  color: var(--success);
+}
+
+.moderation-status-rejected {
+  background: color-mix(in srgb, #e85f55 10%, var(--surface));
+  border-color: color-mix(in srgb, #e85f55 42%, var(--border));
+  color: #e85f55;
+}
+
+.moderation-rejection-form {
+  display: grid;
+  max-width: var(--content-max-width);
+  gap: 16px;
+  margin-bottom: 22px;
+  padding: 20px;
+  background: var(--surface);
+  border: 2px solid color-mix(in srgb, #e85f55 45%, var(--border));
+  border-radius: 6px;
+}
+
+.moderation-rejection-form button {
+  justify-self: start;
+}
+
+.moderation-summary {
+  position: relative;
+  padding-top: 60px;
+}
+
+.moderation-summary > .moderation-status {
+  position: absolute;
+  top: 18px;
+  left: 20px;
+}
+
+.moderation-summary a {
+  color: var(--accent);
+}
+
+.moderation-rejection-copy {
+  color: #e85f55;
+}
+
+.moderation-media-info {
+  max-height: 520px;
+  overflow: auto;
+  padding: 16px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.moderation-files {
+  display: grid;
+  border-top: 1px solid var(--border);
+}
+
+.moderation-files > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.moderation-files span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.moderation-files small {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 .reseed-tabs {
   display: flex;
   gap: 24px;

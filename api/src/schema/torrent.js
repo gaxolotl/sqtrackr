@@ -49,6 +49,11 @@ const Torrent = new mongoose.Schema({
   confidenceScore: Number,
   mediaInfo: String,
   tmdb: { type: TmdbMetadata, default: undefined },
+  submission: {
+    type: mongoose.Schema.ObjectId,
+    unique: true,
+    sparse: true,
+  },
 });
 
 Torrent.plugin(fuzzySearch, { fields: ["name"] });

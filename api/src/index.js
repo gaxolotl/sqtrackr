@@ -25,6 +25,7 @@ import {
   wikiRoutes,
   forumRoutes,
   messageRoutes,
+  moderationRoutes,
 } from "./routes/index.js";
 import {
   register,
@@ -50,6 +51,10 @@ import { getTrackerBaseUrl } from "./utils/trackerUrl.js";
 import { getContentLimits } from "./utils/contentLimits.js";
 import { createPluginHost } from "./plugins/host.js";
 import pluginRegistry from "./plugins/registry.js";
+import Torrent from "./schema/torrent.js";
+import TorrentSubmission from "./schema/torrentSubmission.js";
+import Conversation from "./schema/conversation.js";
+import Message from "./schema/message.js";
 
 mongoose.set("strictQuery", true);
 
@@ -95,6 +100,12 @@ validateConfig(config)
       mongoose.connection.once("open", async () => {
         try {
           console.log("[sq] connected to mongodb successfully");
+          await Promise.all([
+            Torrent.init(),
+            TorrentSubmission.init(),
+            Conversation.init(),
+            Message.init(),
+          ]);
           await loadRuntimeSettings();
           await createAdminUser(mail);
           resolve();
@@ -217,6 +228,8 @@ validateConfig(config)
         allowRegister: process.env.SQ_ALLOW_REGISTER,
         allowAnonymousUploads:
           process.env.SQ_ALLOW_ANONYMOUS_UPLOADS === "true",
+        torrentPremoderation:
+          process.env.SQ_TORRENT_PREMODERATION === "true",
         categories: parseJson(process.env.SQ_TORRENT_CATEGORIES, {}),
         siteWideFreeleech: process.env.SQ_SITE_WIDE_FREELEECH === "true",
         allowUnregisteredView:
@@ -290,6 +303,7 @@ validateConfig(config)
     app.use("/wiki", wikiRoutes());
     app.use("/forum", forumRoutes());
     app.use("/messages", messageRoutes());
+    app.use("/moderation", moderationRoutes());
 
     app.use((err, req, res, next) => {
       if (res.headersSent) {
