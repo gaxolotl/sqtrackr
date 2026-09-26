@@ -190,6 +190,13 @@ export type TrackerRequest = {
   index: number;
   title: string;
   body?: string;
+  bounty?: number;
+  topUps?: Array<{
+    userId?: string;
+    username?: string | null;
+    amount: number;
+    created: number;
+  }>;
   created: number;
   createdBy?: UserRef;
   candidates?: Torrent[];

@@ -76,6 +76,32 @@ export function RequestDetail({ index }: { index: string }) {
     }
   }
 
+  async function topUp(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const payload = new FormData(form);
+    setActionError("");
+    setMessage("");
+    try {
+      const result = await apiFetch<{ bounty: number }>(
+        `/requests/topup/${data?._id}`,
+        {
+          method: "POST",
+          body: JSON.stringify({ amount: Number(payload.get("amount")) }),
+        },
+      );
+      form.reset();
+      setMessage(`Bounty topped up. Total bounty is now ${result.bounty}.`);
+      reload();
+    } catch (requestError) {
+      setActionError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not top up the bounty.",
+      );
+    }
+  }
+
   async function removeRequest() {
     if (!data || !window.confirm("Delete this request permanently?")) return;
     setActionError("");
@@ -108,6 +134,41 @@ export function RequestDetail({ index }: { index: string }) {
               ) : null}
             />
             <article className="prose-card"><p>{data.body}</p></article>
+
+            <section className="content-section">
+              <div className="section-heading-row">
+                <h2 className="section-title">Bounty</h2>
+              </div>
+              <p>
+                <strong>{data.bounty ?? 0}</strong> bonus points.
+              </p>
+              {data.topUps?.length ? (
+                <ul className="source-list">
+                  {data.topUps.map((topUp, position) => (
+                    <li className="source-row" key={`${topUp.userId}-${topUp.created}-${position}`}>
+                      <span>
+                        {topUp.username ?? "Unknown"} added {topUp.amount}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {data.fulfilledBy ? null : (
+                <form className="inline-form" onSubmit={topUp}>
+                  <Field label="Top up with bonus points">
+                    <input
+                      name="amount"
+                      type="number"
+                      required
+                      min={1}
+                      step={1}
+                      defaultValue={10}
+                    />
+                  </Field>
+                  <button className="primary-button" type="submit">Top up</button>
+                </form>
+              )}
+            </section>
 
             <section className="content-section">
               <div className="section-heading-row">
