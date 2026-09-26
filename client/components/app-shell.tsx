@@ -13,7 +13,6 @@ import {
 import clientPackage from "@/package.json";
 import {
   BookOpen,
-  Bell,
   ChevronDown,
   CircleUserRound,
   Download,
@@ -42,8 +41,8 @@ import {
 import { FormEvent, useEffect, useState } from "react";
 import { useTrackerConfig } from "@/hooks/use-tracker-config";
 import { useUnreadMessages } from "@/hooks/use-unread-messages";
-import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import { useModerationQueue } from "@/hooks/use-moderation-queue";
+import { NotificationsBell } from "@/components/notifications-bell";
 import { useApiData } from "@/hooks/use-api-data";
 import { canModerate } from "@/lib/api";
 import { UserAvatar } from "@/components/user-avatar";
@@ -57,7 +56,6 @@ const primaryItems = [
   { label: "requests", href: "/requests", icon: MessageSquarePlus },
   { label: "forum", href: "/forum", icon: MessagesSquare },
   { label: "messages", href: "/messages", icon: Mail },
-  { label: "notifications", href: "/notifications", icon: Bell },
   { label: "rss", href: "/rss", icon: Rss },
   { label: "wiki", href: "/wiki", icon: BookOpen },
 ] as const;
@@ -103,7 +101,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { locale, setLocale, t } = useI18n();
   const { config } = useTrackerConfig();
   const unreadMessages = useUnreadMessages(Boolean(session));
-  const unreadNotifications = useUnreadNotifications(Boolean(session));
   const moderationQueue = useModerationQueue(
     Boolean(session) && canModerate(session?.role),
   );
@@ -227,12 +224,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <nav className="sidebar-nav" aria-label="Main navigation">
             {visiblePrimaryItems.map(({ label, href, icon: Icon }) => {
-              const badge =
-                label === "messages"
-                  ? unreadMessages
-                  : label === "notifications"
-                    ? unreadNotifications
-                    : 0;
+              const badge = label === "messages" ? unreadMessages : 0;
               return (
                 <Link
                   className={`nav-link ${isActive(href) ? "active" : ""}`}
@@ -370,6 +362,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ) : (
               <span className="topbar-spacer" />
             )}
+            {session ? <NotificationsBell /> : null}
             <div className="language-menu">
               <button
                 className="language-trigger"
