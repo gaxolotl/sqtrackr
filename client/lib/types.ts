@@ -220,6 +220,13 @@ export type NotificationPage = {
   pageSize: number;
 };
 
+export type SavedSearch = {
+  _id: string;
+  name: string;
+  query: string;
+  created: number;
+};
+
 export type DashboardTorrent = {
   infoHash: string;
   name: string;

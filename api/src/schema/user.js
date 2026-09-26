@@ -27,6 +27,13 @@ const User = new mongoose.Schema({
     backup: [String],
   },
   bookmarks: [mongoose.Schema.ObjectId],
+  savedSearches: [
+    {
+      name: String,
+      query: String,
+      created: Number,
+    },
+  ],
   bio: String,
   location: String,
   website: String,

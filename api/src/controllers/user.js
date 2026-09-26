@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import mongoose from "mongoose";
 import speakeasy from "speakeasy";
 import qrcode from "qrcode";
 import User from "../schema/user.js";
@@ -935,6 +936,77 @@ export const getDashboard = async (req, res, next) => {
       currentHnrs,
       recentSnatches,
     });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const getSavedSearches = async (req, res, next) => {
+  try {
+    const user = await User.findOne({ _id: req.userId })
+      .select("savedSearches")
+      .lean();
+    if (!user) {
+      res.status(404).send("User does not exist");
+      return;
+    }
+    res.json(user.savedSearches ?? []);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const saveSearch = async (req, res, next) => {
+  try {
+    const name = String(req.body?.name ?? "").trim().slice(0, 100);
+    const query = String(req.body?.query ?? "").trim().slice(0, 200);
+    if (!name || !query) {
+      res.status(400).send("Name and query are required");
+      return;
+    }
+    const user = await User.findOne({ _id: req.userId })
+      .select("savedSearches")
+      .lean();
+    if (!user) {
+      res.status(404).send("User does not exist");
+      return;
+    }
+    if ((user.savedSearches ?? []).length >= 25) {
+      res.status(409).send("Too many saved searches (maximum 25)");
+      return;
+    }
+    const updated = await User.findOneAndUpdate(
+      { _id: req.userId },
+      { $push: { savedSearches: { name, query, created: Date.now() } } },
+      { new: true },
+    )
+      .select("savedSearches")
+      .lean();
+    res.status(200).json(updated.savedSearches ?? []);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const deleteSavedSearch = async (req, res, next) => {
+  try {
+    const { searchId } = req.params;
+    if (!mongoose.isValidObjectId(searchId)) {
+      res.status(404).send("Saved search does not exist");
+      return;
+    }
+    const updated = await User.findOneAndUpdate(
+      { _id: req.userId },
+      { $pull: { savedSearches: { _id: searchId } } },
+      { new: true },
+    )
+      .select("savedSearches")
+      .lean();
+    if (!updated) {
+      res.status(404).send("User does not exist");
+      return;
+    }
+    res.status(200).json(updated.savedSearches ?? []);
   } catch (e) {
     next(e);
   }

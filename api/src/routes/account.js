@@ -1,10 +1,12 @@
 import express from "express";
 import ratelimit from "express-rate-limit";
 import {
+  deleteSavedSearch,
   fetchInvites,
   generateInvite,
   changePassword,
   getDashboard,
+  getSavedSearches,
   getUserStats,
   getUserRole,
   getUserVerifiedEmailStatus,
@@ -14,6 +16,7 @@ import {
   disableTotp,
   deleteAccount,
   getUserBookmarks,
+  saveSearch,
 } from "../controllers/user.js";
 import {
   deleteAvatar,
@@ -48,6 +51,9 @@ export default (tracker, mail) => {
   router.post("/change-password", limiter, changePassword(mail));
   router.get("/get-stats", limiter, getUserStats);
   router.get("/dashboard", limiter, getDashboard);
+  router.get("/searches", limiter, getSavedSearches);
+  router.post("/searches", limiter, saveSearch);
+  router.delete("/searches/:searchId", limiter, deleteSavedSearch);
   router.get("/get-role", limiter, getUserRole);
   router.get("/get-verified", limiter, getUserVerifiedEmailStatus);
   router.post("/buy", limiter, buyItems);
