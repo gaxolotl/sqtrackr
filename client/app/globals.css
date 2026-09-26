@@ -1593,6 +1593,17 @@ h1 {
   margin-bottom: 16px;
 }
 
+.attachment-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.attachment-error {
+  color: #ff8675;
+  font-size: 13px;
+}
+
 .status-pill,
 .tag {
   padding: 5px 9px;

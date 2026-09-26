@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-context";
 import {
   ActionMessage,
@@ -10,6 +10,7 @@ import {
   PageHeader,
   SignInRequired,
 } from "@/components/ui";
+import { AttachmentPicker } from "@/components/attachment-picker";
 import { useApiData } from "@/hooks/use-api-data";
 import { useTrackerConfig } from "@/hooks/use-tracker-config";
 import { apiFetch } from "@/lib/api";
@@ -24,6 +25,16 @@ export function AnnouncementEditor({ slug }: { slug?: string }) {
   );
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const bodyBox = useRef<HTMLTextAreaElement>(null);
+
+  function insertAttachment(markdown: string) {
+    const box = bodyBox.current;
+    if (!box) return;
+    const start = box.selectionStart ?? box.value.length;
+    const end = box.selectionEnd ?? start;
+    box.value = `${box.value.slice(0, start)}${markdown}${box.value.slice(end)}`;
+    box.focus();
+  }
 
   if (!session) {
     return <main className="page"><SignInRequired /></main>;
@@ -65,7 +76,8 @@ export function AnnouncementEditor({ slug }: { slug?: string }) {
     <form className="stack-form wide-form" key={data?._id ?? "new"} onSubmit={submit}>
       <Field label="Title"><input name="title" required maxLength={config.contentLimits.title} defaultValue={data?.title} /></Field>
       <Field label="Body">
-        <textarea name="body" rows={10} required maxLength={config.contentLimits.body} placeholder="Markdown supported" defaultValue={data?.body} />
+        <textarea ref={bodyBox} name="body" rows={10} required maxLength={config.contentLimits.body} placeholder="Markdown supported" defaultValue={data?.body} />
+        <AttachmentPicker onInsert={insertAttachment} />
       </Field>
       <div className="inline-checks">
         <label className="check-field"><input type="checkbox" name="pinned" defaultChecked={data?.pinned} /> Pin announcement</label>

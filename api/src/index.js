@@ -15,6 +15,7 @@ import createTrackerRoute from "./tracker/routes.js";
 import auth from "./middleware/auth.js";
 import {
   accountRoutes,
+  attachmentRoutes,
   userRoutes,
   torrentRoutes,
   announcementRoutes,
@@ -48,6 +49,7 @@ import createAdminUser from "./setup/createAdminUser.js";
 import { envFlag } from "./utils/env.js";
 import { loadRuntimeSettings } from "./utils/runtimeSettings.js";
 import { serveAvatar } from "./controllers/profile.js";
+import { serveAttachment } from "./controllers/attachments.js";
 import { getTrackerBaseUrl } from "./utils/trackerUrl.js";
 import { getContentLimits } from "./utils/contentLimits.js";
 import { createPluginHost } from "./plugins/host.js";
@@ -243,9 +245,14 @@ validateConfig(config)
         ),
         avatarMaxSizeKb: Number(process.env.SQ_AVATAR_MAX_SIZE_KB || 512),
         allowGifAvatars: process.env.SQ_ALLOW_GIF_AVATARS !== "false",
+        attachmentsEnabled: process.env.SQ_ATTACHMENTS_ENABLED !== "false",
+        attachmentMaxSizeKb: Number(
+          process.env.SQ_ATTACHMENT_MAX_SIZE_KB || 2048,
+        ),
       });
     });
     app.get("/user/:username/avatar", serveAvatar);
+    app.get("/attachments/file/:fileId", serveAttachment);
 
     // auth routes
     app.post("/register", authLimiter, register(mail));
@@ -294,6 +301,7 @@ validateConfig(config)
     app.use("/admin/plugins", pluginHost.managementRouter);
 
     app.use("/account", accountRoutes(tracker, mail));
+    app.use("/attachments", attachmentRoutes());
     app.use("/user", userRoutes(tracker));
     app.use("/torrent", torrentRoutes(tracker));
     app.use("/announcements", announcementRoutes());

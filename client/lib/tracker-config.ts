@@ -36,6 +36,8 @@ export const FALLBACK_TRACKER_CONFIG: TrackerConfig = {
   avatarMaxResolution: 512,
   avatarMaxSizeKb: 512,
   allowGifAvatars: true,
+  attachmentsEnabled: true,
+  attachmentMaxSizeKb: 2048,
   trackerUrl: "",
 };
 

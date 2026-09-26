@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { Lock, MessageSquare, Pencil, Pin, Trash2, Unlock } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -14,6 +14,7 @@ import {
   SignInRequired,
 } from "@/components/ui";
 import { useApiData } from "@/hooks/use-api-data";
+import { AttachmentPicker } from "@/components/attachment-picker";
 import { useTrackerConfig } from "@/hooks/use-tracker-config";
 import { apiFetch, canModerate } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
@@ -40,6 +41,16 @@ export function ForumThreadPage({ threadId }: { threadId: string }) {
   const [actionError, setActionError] = useState("");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const replyBox = useRef<HTMLTextAreaElement>(null);
+
+  function insertReplyAttachment(markdown: string) {
+    const box = replyBox.current;
+    if (!box) return;
+    const start = box.selectionStart ?? box.value.length;
+    const end = box.selectionEnd ?? start;
+    box.value = `${box.value.slice(0, start)}${markdown}${box.value.slice(end)}`;
+    box.focus();
+  }
   const thread = useApiData<ForumThread>(
     session ? `/forum/thread/${encodeURIComponent(threadId)}` : null,
   );
@@ -510,11 +521,13 @@ export function ForumThreadPage({ threadId }: { threadId: string }) {
                 >
                   <Field label="Reply" hint="Markdown is supported.">
                     <textarea
+                      ref={replyBox}
                       name="body"
                       rows={7}
                       maxLength={Math.min(config.contentLimits.body, 50000)}
                       required
                     />
+                    <AttachmentPicker onInsert={insertReplyAttachment} />
                   </Field>
                   <div className="form-actions">
                     <button

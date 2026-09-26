@@ -338,6 +338,8 @@ export type TrackerConfig = {
   avatarMaxResolution: number;
   avatarMaxSizeKb: number;
   allowGifAvatars: boolean;
+  attachmentsEnabled: boolean;
+  attachmentMaxSizeKb: number;
   trackerUrl: string;
 };
 
