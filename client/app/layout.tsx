@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { CSSProperties } from "react";
 import { connection } from "next/server";
 import { AppShell } from "@/components/app-shell";
@@ -16,6 +16,15 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   description: "A focused, private torrent tracker.",
+  appleWebApp: {
+    capable: true,
+    title: "sqtrackr",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#f0644c",
 };
 
 async function loadTrackerConfig() {

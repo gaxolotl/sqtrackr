@@ -105,7 +105,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const unreadMessages = useUnreadMessages(Boolean(session));
   const unreadNotifications = useUnreadNotifications(Boolean(session));
   const moderationQueue = useModerationQueue(
-    Boolean(session) && canModerate(session.role),
+    Boolean(session) && canModerate(session?.role),
   );
   const ownProfile = useApiData<{ avatarUpdated?: number }>(
     session ? "/account/profile" : null,

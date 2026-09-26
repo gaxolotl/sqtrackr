@@ -2709,6 +2709,16 @@ h1 {
     height: 54px;
   }
 
+  .feed-card {
+    flex-wrap: wrap;
+    gap: 12px;
+    min-height: 0;
+  }
+
+  .feed-card-link {
+    flex: 1 1 100%;
+  }
+
   .media-metadata-card {
     grid-template-columns: 1fr;
   }
