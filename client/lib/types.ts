@@ -161,6 +161,7 @@ export type UserProfile = {
   ratio?: number;
   hitnruns?: number;
   snatches?: number;
+  warnings?: UserWarning[];
   downloaded?: { bytes?: number; count?: number };
   uploaded?: { bytes?: number; count?: number };
   torrents?: Torrent[];
@@ -225,6 +226,16 @@ export type SavedSearch = {
   name: string;
   query: string;
   created: number;
+};
+
+export type UserWarning = {
+  _id: string;
+  reason: string;
+  issuedByUsername?: string | null;
+  created: number;
+  resolved?: boolean;
+  resolvedAt?: number;
+  appeal?: { text: string; created: number };
 };
 
 export type DashboardTorrent = {

@@ -10,6 +10,7 @@ import {
 } from "../utils/contentLimits.js";
 import { sendSystemMessage } from "../utils/directMessage.js";
 import pushNotification from "../utils/notify.js";
+import logAudit from "../utils/audit.js";
 import { canModerate } from "../utils/roles.js";
 
 const pageSize = 25;
@@ -76,6 +77,11 @@ const notifyDecision = async (submission) => {
       ? `/torrent/${submission.infoHash}`
       : `/moderation/uploads/${submission._id}`,
   });
+  await logAudit(
+    submission.reviewedBy,
+    approved ? "submission.approved" : "submission.rejected",
+    submission.name,
+  );
   await TorrentSubmission.updateOne(
     { _id: submission._id, notifiedAt: { $exists: false } },
     { $set: { notifiedAt: Date.now() } },

@@ -14,8 +14,11 @@ import { getUserRatio } from "../utils/ratio.js";
 import { getSnatchDetails, getUserHitNRuns } from "../utils/hitnrun.js";
 import { BYTES_GB } from "../tracker/announce.js";
 import { envFlag } from "../utils/env.js";
-import { isAdmin, VALID_ROLES } from "../utils/roles.js";
+import { isAdmin, VALID_ROLES, canModerate } from "../utils/roles.js";
 import { getContentLimits } from "../utils/contentLimits.js";
+import logAudit from "../utils/audit.js";
+import pushNotification from "../utils/notify.js";
+import Warning from "../schema/warning.js";
 
 export const sendVerificationEmail = async (mail, address, token) => {
   await mail.sendMail({
@@ -822,6 +825,29 @@ export const fetchUser = (tracker) => async (req, res, next) => {
     });
     user.torrents = torrents;
 
+    if (canModerate(req.userRole)) {
+      const warnings = await Warning.find({ userId: user._id })
+        .sort({ created: -1 })
+        .lean();
+      const issuerIds = [
+        ...new Set(
+          warnings.map((warning) => String(warning.issuedBy)).filter(Boolean),
+        ),
+      ];
+      const issuers = issuerIds.length
+        ? await User.find({ _id: { $in: issuerIds } })
+            .select("username")
+            .lean()
+        : [];
+      const issuerNames = new Map(
+        issuers.map((issuer) => [String(issuer._id), issuer.username]),
+      );
+      user.warnings = warnings.map((warning) => ({
+        ...warning,
+        issuedByUsername: issuerNames.get(String(warning.issuedBy)) ?? null,
+      }));
+    }
+
     res.json(user);
   } catch (e) {
     next(e);
@@ -1104,6 +1130,7 @@ export const banUser = async (req, res, next) => {
         },
       },
     );
+    await logAudit(req.userId, "user.banned", req.params.username, banReason);
 
     res.sendStatus(200);
   } catch (e) {
@@ -1238,6 +1265,7 @@ export const unbanUser = async (req, res, next) => {
       { username: req.params.username },
       { $set: { banned: false } },
     );
+    await logAudit(req.userId, "user.unbanned", req.params.username);
 
     res.sendStatus(200);
   } catch (e) {
@@ -1275,6 +1303,118 @@ export const setUserRole = async (req, res, next) => {
     }
 
     await User.findOneAndUpdate({ _id: user._id }, { $set: { role } });
+    await logAudit(req.userId, "user.role", req.params.username, role);
+    res.sendStatus(200);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const issueWarning = async (req, res, next) => {
+  try {
+    if (!canModerate(req.userRole)) {
+      res.status(401).send("You do not have permission to warn users");
+      return;
+    }
+    const reason = String(req.body?.reason ?? "").trim().slice(0, 2000);
+    if (!reason) {
+      res.status(400).send("A reason is required");
+      return;
+    }
+    const user = await User.findOne({ username: req.params.username }).lean();
+    if (!user) {
+      res.status(404).send("User does not exist");
+      return;
+    }
+    if (user.username === "admin") {
+      res.status(403).send("The primary admin account cannot be warned");
+      return;
+    }
+    const warning = await new Warning({
+      userId: user._id,
+      reason,
+      issuedBy: req.userId,
+      created: Date.now(),
+      resolved: false,
+    }).save();
+    await pushNotification(user._id, {
+      type: "warning",
+      title: `You received a warning: ${reason.slice(0, 120)}`,
+      link: "/account",
+    });
+    await logAudit(req.userId, "user.warned", user.username, reason);
+    res.status(200).json(warning);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const resolveWarning = async (req, res, next) => {
+  try {
+    if (!canModerate(req.userRole)) {
+      res.status(401).send("You do not have permission to resolve warnings");
+      return;
+    }
+    const { warningId } = req.params;
+    if (!mongoose.isValidObjectId(warningId)) {
+      res.status(404).send("Warning does not exist");
+      return;
+    }
+    const warning = await Warning.findOneAndUpdate(
+      { _id: warningId },
+      { $set: { resolved: true, resolvedAt: Date.now() } },
+      { new: true },
+    ).lean();
+    if (!warning) {
+      res.status(404).send("Warning does not exist");
+      return;
+    }
+    const user = await User.findOne({ _id: warning.userId })
+      .select("username")
+      .lean();
+    await logAudit(
+      req.userId,
+      "user.warning-resolved",
+      user?.username ?? String(warning.userId),
+    );
+    res.sendStatus(200);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const getOwnWarnings = async (req, res, next) => {
+  try {
+    const warnings = await Warning.find({ userId: req.userId })
+      .sort({ created: -1 })
+      .lean();
+    res.json(warnings);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const appealWarning = async (req, res, next) => {
+  try {
+    const { warningId } = req.params;
+    if (!mongoose.isValidObjectId(warningId)) {
+      res.status(404).send("Warning does not exist");
+      return;
+    }
+    const text = String(req.body?.text ?? "").trim().slice(0, 2000);
+    if (!text) {
+      res.status(400).send("Appeal text is required");
+      return;
+    }
+    const warning = await Warning.findOneAndUpdate(
+      { _id: warningId, userId: req.userId, resolved: false },
+      { $set: { appeal: { text, created: Date.now() } } },
+      { new: true },
+    ).lean();
+    if (!warning) {
+      res.status(404).send("Warning does not exist or is already resolved");
+      return;
+    }
     res.sendStatus(200);
   } catch (e) {
     next(e);

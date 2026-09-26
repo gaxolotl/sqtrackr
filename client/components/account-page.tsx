@@ -15,7 +15,7 @@ import {
 import { useApiData } from "@/hooks/use-api-data";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
-import type { Invite } from "@/lib/types";
+import type { Invite, UserWarning } from "@/lib/types";
 import { UserAvatar } from "@/components/user-avatar";
 import { useTrackerConfig } from "@/hooks/use-tracker-config";
 
@@ -39,6 +39,9 @@ type EditableProfile = {
 export function AccountPage() {
   const { session } = useAuth();
   const stats = useApiData<AccountStats>(session ? "/account/get-stats" : null);
+  const warnings = useApiData<UserWarning[]>(
+    session ? "/account/warnings" : null,
+  );
   const invites = useApiData<Invite[]>(session ? "/account/invites" : null);
   const profile = useApiData<EditableProfile>(
     session ? "/account/profile" : null,
@@ -49,6 +52,7 @@ export function AccountPage() {
   const [totp, setTotp] = useState<TotpSetup | null>(null);
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
   if (!session)
     return (
       <main className="page">
@@ -75,6 +79,27 @@ export function AccountPage() {
     } catch (requestError) {
       setActionError(
         requestError instanceof Error ? requestError.message : "Action failed.",
+      );
+    }
+  }
+
+  async function appealWarning(warningId: string) {
+    const text = window.prompt("Explain why this warning should be lifted:");
+    if (!text || !text.trim()) return;
+    setMessage("");
+    setActionError("");
+    try {
+      await apiFetch(`/account/warnings/${warningId}/appeal`, {
+        method: "POST",
+        body: JSON.stringify({ text: text.trim() }),
+      });
+      setMessage("Appeal sent. Staff will review it.");
+      warnings.reload();
+    } catch (requestError) {
+      setActionError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not send the appeal.",
       );
     }
   }
@@ -287,6 +312,37 @@ export function AccountPage() {
           </section>
         ) : null}
       </ApiState>
+      {warnings.data?.some((warning) => !warning.resolved) ? (
+        <section className="account-section">
+          <h2>Warnings</h2>
+          <div className="feed-list">
+            {warnings.data
+              .filter((warning) => !warning.resolved)
+              .map((warning) => (
+                <article className="feed-card" key={warning._id}>
+                  <div>
+                    <h2>{warning.reason}</h2>
+                    <p>Issued {formatDateTime(warning.created)}</p>
+                    {warning.appeal ? (
+                      <p>Appeal sent: {warning.appeal.text}</p>
+                    ) : null}
+                  </div>
+                  {warning.appeal ? (
+                    <span className="status-pill">Appealed</span>
+                  ) : (
+                    <button
+                      className="secondary-button compact-button"
+                      type="button"
+                      onClick={() => appealWarning(warning._id)}
+                    >
+                      Appeal
+                    </button>
+                  )}
+                </article>
+              ))}
+          </div>
+        </section>
+      ) : null}
       <ApiState loading={stats.loading} error={stats.error} empty={!stats.data}>
         <section className="account-section">
           <h2>Bonus points</h2>

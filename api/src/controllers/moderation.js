@@ -3,6 +3,8 @@ import Torrent from "../schema/torrent.js";
 import User from "../schema/user.js";
 import Progress from "../schema/progress.js";
 import CheatLog from "../schema/cheatLog.js";
+import AuditLog from "../schema/auditLog.js";
+import logAudit from "../utils/audit.js";
 import Invite from "../schema/invite.js";
 import Request from "../schema/request.js";
 import Comment from "../schema/comment.js";
@@ -186,6 +188,7 @@ export const setReportResolved = async (req, res, next) => {
         },
       },
     );
+    await logAudit(req.userId, "report.resolved", String(req.params.reportId));
 
     res.sendStatus(200);
   } catch (e) {
@@ -528,6 +531,52 @@ export const listCheatLog = async (req, res, next) => {
         username: usernames.get(String(entry.userId)) ?? null,
       })),
     );
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const listAuditLog = async (req, res, next) => {
+  try {
+    if (!canModerate(req.userRole)) {
+      res.status(401).send("You do not have permission to view the audit log");
+      return;
+    }
+
+    const page = Math.max(parseInt(req.params.page, 10) || 0, 0);
+    const perPage = 25;
+    const [entries, total] = await Promise.all([
+      AuditLog.find({})
+        .sort({ created: -1 })
+        .skip(page * perPage)
+        .limit(perPage)
+        .lean(),
+      AuditLog.countDocuments(),
+    ]);
+
+    const actorIds = [
+      ...new Set(
+        entries.map((entry) => entry.actorId && String(entry.actorId)).filter(Boolean),
+      ),
+    ];
+    const actors = actorIds.length
+      ? await User.find({ _id: { $in: actorIds } })
+          .select("username")
+          .lean()
+      : [];
+    const actorNames = new Map(
+      actors.map((actor) => [String(actor._id), actor.username]),
+    );
+
+    res.json({
+      items: entries.map((entry) => ({
+        ...entry,
+        actorUsername: actorNames.get(String(entry.actorId)) ?? null,
+      })),
+      total,
+      page,
+      pageSize: perPage,
+    });
   } catch (e) {
     next(e);
   }

@@ -12,17 +12,18 @@ import {
   ShieldCheck,
   Upload,
 } from "lucide-react";
-import { useState } from "react";
+import { FormEvent, useState } from "react";
 import { useAuth } from "@/components/auth-context";
 import { TorrentTable } from "@/components/torrent-table";
 import {
   ActionMessage,
   ApiState,
+  Field,
   PageHeader,
   SignInRequired,
 } from "@/components/ui";
 import { useApiData } from "@/hooks/use-api-data";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, canModerate } from "@/lib/api";
 import { formatBytes, formatDate, formatDateTime } from "@/lib/format";
 import type { UserProfile as UserProfileType } from "@/lib/types";
 import { UserAvatar } from "@/components/user-avatar";
@@ -76,6 +77,45 @@ export function UserProfile({ username }: { username: string }) {
         requestError instanceof Error
           ? requestError.message
           : "Could not update the user.",
+      );
+    }
+  }
+
+  async function issueWarning(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!data) return;
+    const reason = String(new FormData(event.currentTarget).get("reason") ?? "").trim();
+    if (!reason) return;
+    setActionError("");
+    setMessage("");
+    try {
+      await apiFetch(`/user/warn/${encodeURIComponent(data.username)}`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      });
+      setMessage("Warning issued.");
+      reload();
+    } catch (requestError) {
+      setActionError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not issue the warning.",
+      );
+    }
+  }
+
+  async function resolveWarning(warningId: string) {
+    setActionError("");
+    setMessage("");
+    try {
+      await apiFetch(`/user/unwarn/${warningId}`, { method: "POST" });
+      setMessage("Warning resolved.");
+      reload();
+    } catch (requestError) {
+      setActionError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not resolve the warning.",
       );
     }
   }
@@ -236,6 +276,62 @@ export function UserProfile({ username }: { username: string }) {
                     <option value="admin">Admin</option>
                   </select>
                 </label>
+              </section>
+            ) : null}
+
+            {canModerate(session.role) ? (
+              <section className="content-section">
+                <h2 className="section-title">Warnings</h2>
+                {data.warnings?.length ? (
+                  <div className="feed-list">
+                    {data.warnings.map((warning) => (
+                      <article className="feed-card" key={warning._id}>
+                        <div>
+                          <h2>{warning.reason}</h2>
+                          <p>
+                            Issued{" "}
+                            {formatDateTime(warning.created)}
+                            {warning.issuedByUsername
+                              ? ` by ${warning.issuedByUsername}`
+                              : ""}
+                            {warning.resolved ? " · Resolved" : ""}
+                          </p>
+                          {warning.appeal ? (
+                            <p>
+                              Appeal: {warning.appeal.text}
+                            </p>
+                          ) : null}
+                        </div>
+                        {warning.resolved ? (
+                          <span className="status-pill">Resolved</span>
+                        ) : (
+                          <button
+                            className="secondary-button compact-button"
+                            type="button"
+                            onClick={() => resolveWarning(warning._id)}
+                          >
+                            Resolve
+                          </button>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="state-panel">No warnings.</div>
+                )}
+                <form className="inline-form" onSubmit={issueWarning}>
+                  <Field label="Issue a warning">
+                    <input
+                      name="reason"
+                      required
+                      maxLength={2000}
+                      placeholder="Reason for the warning"
+                    />
+                  </Field>
+                  <button className="primary-button" type="submit">
+                    Warn
+                  </button>
+                </form>
               </section>
             ) : null}
 

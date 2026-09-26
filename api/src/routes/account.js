@@ -1,11 +1,13 @@
 import express from "express";
 import ratelimit from "express-rate-limit";
 import {
+  appealWarning,
   deleteSavedSearch,
   fetchInvites,
   generateInvite,
   changePassword,
   getDashboard,
+  getOwnWarnings,
   getSavedSearches,
   getUserStats,
   getUserRole,
@@ -54,6 +56,8 @@ export default (tracker, mail) => {
   router.get("/searches", limiter, getSavedSearches);
   router.post("/searches", limiter, saveSearch);
   router.delete("/searches/:searchId", limiter, deleteSavedSearch);
+  router.get("/warnings", limiter, getOwnWarnings);
+  router.post("/warnings/:warningId/appeal", limiter, appealWarning);
   router.get("/get-role", limiter, getUserRole);
   router.get("/get-verified", limiter, getUserVerifiedEmailStatus);
   router.post("/buy", limiter, buyItems);
