@@ -4,6 +4,7 @@ import {
   fetchInvites,
   generateInvite,
   changePassword,
+  getDashboard,
   getUserStats,
   getUserRole,
   getUserVerifiedEmailStatus,
@@ -46,6 +47,7 @@ export default (tracker, mail) => {
   router.post("/generate-invite", limiter, generateInvite(mail));
   router.post("/change-password", limiter, changePassword(mail));
   router.get("/get-stats", limiter, getUserStats);
+  router.get("/dashboard", limiter, getDashboard);
   router.get("/get-role", limiter, getUserRole);
   router.get("/get-verified", limiter, getUserVerifiedEmailStatus);
   router.post("/buy", limiter, buyItems);

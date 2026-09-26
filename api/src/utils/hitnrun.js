@@ -1,12 +1,14 @@
 import Progress from "../schema/progress.js";
 import Snatch from "../schema/snatch.js";
 
-// A snatch is a hit'n'run when it is past the grace period and the user has
-// neither seeded it to a 1:1 ratio nor for the minimum seedtime.
-export const getUserHitNRuns = async (_id) => {
-  const minSeedSeconds =
-    Number(process.env.SQ_MIN_SEEDTIME_HOURS ?? 72) * 3600;
-  const graceSeconds = Number(process.env.SQ_HNR_GRACE_HOURS ?? 24) * 3600;
+const getThresholds = () => ({
+  minSeedSeconds: Number(process.env.SQ_MIN_SEEDTIME_HOURS ?? 72) * 3600,
+  graceSeconds: Number(process.env.SQ_HNR_GRACE_HOURS ?? 24) * 3600,
+});
+
+// Per-snatch status shared by the HnR count and the dashboard.
+export const getSnatchDetails = async (_id) => {
+  const { minSeedSeconds, graceSeconds } = getThresholds();
   const now = Date.now();
 
   const snatches = (await Snatch.find({ userId: _id }).lean()) ?? [];
@@ -21,23 +23,41 @@ export const getUserHitNRuns = async (_id) => {
     totalsByHash.set(record.infoHash, current);
   }
 
-  let count = 0;
-  for (const snatch of snatches) {
+  const details = snatches.map((snatch) => {
     const totals = totalsByHash.get(snatch.infoHash) ?? { up: 0, down: 0 };
     const ratioOk = totals.down === 0 || totals.up >= totals.down;
     const seededEnough = (snatch.seedTime ?? 0) >= minSeedSeconds;
     const pastGrace = now - (snatch.snatchedAt ?? now) > graceSeconds;
-    if (pastGrace && !ratioOk && !seededEnough) count += 1;
-  }
+    return {
+      infoHash: snatch.infoHash,
+      snatchedAt: snatch.snatchedAt,
+      seedTime: snatch.seedTime ?? 0,
+      uploaded: totals.up,
+      downloaded: totals.down,
+      pastGrace,
+      ratioOk,
+      seededEnough,
+      isHnr: pastGrace && !ratioOk && !seededEnough,
+      graceEndsAt: (snatch.snatchedAt ?? now) + graceSeconds,
+    };
+  });
 
   // Records predating snatch tracking keep the legacy up < down rule.
+  let legacyCount = 0;
   for (const record of progressRecords) {
     if (record.left !== 0) continue;
     if (snatchedHashes.has(record.infoHash)) continue;
     if ((record.uploaded?.total ?? 0) < (record.downloaded?.total ?? 0)) {
-      count += 1;
+      legacyCount += 1;
     }
   }
 
-  return count;
+  return { details, legacyCount, minSeedSeconds, graceSeconds };
+};
+
+// A snatch is a hit'n'run when it is past the grace period and the user has
+// neither seeded it to a 1:1 ratio nor for the minimum seedtime.
+export const getUserHitNRuns = async (_id) => {
+  const { details, legacyCount } = await getSnatchDetails(_id);
+  return details.filter((snatch) => snatch.isHnr).length + legacyCount;
 };

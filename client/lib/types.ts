@@ -220,6 +220,37 @@ export type NotificationPage = {
   pageSize: number;
 };
 
+export type DashboardTorrent = {
+  infoHash: string;
+  name: string;
+};
+
+export type DashboardSnatch = DashboardTorrent & {
+  snatchedAt: number;
+  seedTime: number;
+  uploaded: number;
+  downloaded: number;
+  pastGrace: boolean;
+  ratioOk: boolean;
+  seededEnough: boolean;
+  isHnr: boolean;
+  graceEndsAt: number;
+};
+
+export type DashboardData = {
+  up: number;
+  down: number;
+  ratio: number;
+  bp: number;
+  hitnruns: number;
+  snatches: number;
+  seeding: DashboardTorrent[];
+  leeching: DashboardTorrent[];
+  warnings: DashboardSnatch[];
+  currentHnrs: DashboardSnatch[];
+  recentSnatches: DashboardSnatch[];
+};
+
 export type Report = {
   _id: string;
   reason: string;

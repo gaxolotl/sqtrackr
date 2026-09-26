@@ -11,7 +11,8 @@ import { ApiState } from "@/components/ui";
 import { TorrentTable } from "@/components/torrent-table";
 import { useApiData } from "@/hooks/use-api-data";
 import { useTrackerConfig } from "@/hooks/use-tracker-config";
-import type { Torrent } from "@/lib/types";
+import { formatBytes, formatDateTime } from "@/lib/format";
+import type { DashboardData, Torrent } from "@/lib/types";
 
 export function HomeDashboard({ initialQuery = "" }: { initialQuery?: string }) {
   const router = useRouter();
@@ -21,6 +22,7 @@ export function HomeDashboard({ initialQuery = "" }: { initialQuery?: string }) 
   const { config } = useTrackerConfig();
   const { data: torrents, error, loading } = useApiData<Torrent[]>(session ? "/torrent/latest?count=25" : null);
   const { data: popular, error: popularError, loading: popularLoading } = useApiData<{ torrents?: Torrent[] }>(session ? "/torrent/search?sort=downloads:desc&page=0" : null);
+  const { data: dashboard, error: dashboardError, loading: dashboardLoading } = useApiData<DashboardData>(session ? "/account/dashboard" : null);
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -64,6 +66,82 @@ export function HomeDashboard({ initialQuery = "" }: { initialQuery?: string }) 
         <button className="primary-button" type="submit">{t("search")}</button>
       </form>
 
+      <section className="content-section" id="my-stats">
+        <div className="section-heading-row">
+          <h2 className="section-title">My stats</h2>
+        </div>
+        <ApiState loading={dashboardLoading} error={dashboardError} empty={!dashboardLoading && !dashboardError && !dashboard}>
+          {dashboard ? (
+            <>
+              <p>
+                Ratio <strong>{Number(dashboard.ratio ?? 0).toFixed(2)}</strong>
+                {" · "}Uploaded <strong>{formatBytes(dashboard.up ?? 0)}</strong>
+                {" · "}Downloaded <strong>{formatBytes(dashboard.down ?? 0)}</strong>
+                {" · "}Snatches <strong>{dashboard.snatches ?? 0}</strong>
+                {" · "}Hit&apos;n&apos;runs <strong>{dashboard.hitnruns ?? 0}</strong>
+                {" · "}Bonus points <strong>{dashboard.bp ?? 0}</strong>
+              </p>
+              <p>
+                Seeding <strong>{dashboard.seeding.length}</strong>
+                {" · "}Leeching <strong>{dashboard.leeching.length}</strong>
+              </p>
+              {dashboard.warnings.length ? (
+                <>
+                  <div className="section-heading-row">
+                    <h2 className="section-title">Seed to avoid a hit&apos;n&apos;run</h2>
+                  </div>
+                  <div className="feed-list">
+                    {dashboard.warnings.map((snatch) => (
+                      <Link className="feed-card" href={`/torrent/${snatch.infoHash}`} key={snatch.infoHash}>
+                        <div>
+                          <h2>{snatch.name}</h2>
+                          <p>Grace ends {formatDateTime(snatch.graceEndsAt)}</p>
+                        </div>
+                        <span className="status-pill">Warning</span>
+                      </Link>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+              {dashboard.currentHnrs.length ? (
+                <>
+                  <div className="section-heading-row">
+                    <h2 className="section-title">Hit&apos;n&apos;runs</h2>
+                  </div>
+                  <div className="feed-list">
+                    {dashboard.currentHnrs.map((snatch) => (
+                      <Link className="feed-card" href={`/torrent/${snatch.infoHash}`} key={snatch.infoHash}>
+                        <div>
+                          <h2>{snatch.name}</h2>
+                          <p>Snatched {formatDateTime(snatch.snatchedAt)}</p>
+                        </div>
+                        <span className="status-pill">Hit&apos;n&apos;run</span>
+                      </Link>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+              {dashboard.leeching.length ? (
+                <>
+                  <div className="section-heading-row">
+                    <h2 className="section-title">Currently leeching</h2>
+                  </div>
+                  <div className="feed-list">
+                    {dashboard.leeching.slice(0, 10).map((torrent) => (
+                      <Link className="feed-card" href={`/torrent/${torrent.infoHash}`} key={torrent.infoHash}>
+                        <div>
+                          <h2>{torrent.name}</h2>
+                        </div>
+                        <span className="status-pill">Leeching</span>
+                      </Link>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+            </>
+          ) : null}
+        </ApiState>
+      </section>
       <section className="content-section" id="browse">
         <div className="section-heading-row">
           <h2 className="section-title">{t("latestTorrents")}</h2>

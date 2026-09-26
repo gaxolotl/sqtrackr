@@ -7,9 +7,10 @@ import User from "../schema/user.js";
 import Invite from "../schema/invite.js";
 import Progress from "../schema/progress.js";
 import Snatch from "../schema/snatch.js";
+import Torrent from "../schema/torrent.js";
 import { getTorrentsPage } from "./torrent.js";
 import { getUserRatio } from "../utils/ratio.js";
-import { getUserHitNRuns } from "../utils/hitnrun.js";
+import { getSnatchDetails, getUserHitNRuns } from "../utils/hitnrun.js";
 import { BYTES_GB } from "../tracker/announce.js";
 import { envFlag } from "../utils/env.js";
 import { isAdmin, VALID_ROLES } from "../utils/roles.js";
@@ -844,6 +845,95 @@ export const getUserStats = async (req, res, next) => {
       bp: Number(user.bonusPoints ?? 0),
       hitnruns,
       snatches,
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const getDashboard = async (req, res, next) => {
+  try {
+    const user = await User.findOne({ _id: req.userId }).lean();
+    if (!user) {
+      res.status(404).send("User does not exist");
+      return;
+    }
+
+    const ratioStats = await getUserRatio(user._id);
+    const { details, legacyCount } = await getSnatchDetails(user._id);
+    const hitnruns =
+      details.filter((snatch) => snatch.isHnr).length + legacyCount;
+
+    const hashes = [...new Set(details.map((snatch) => snatch.infoHash))];
+    const torrents = hashes.length
+      ? await Torrent.find({ infoHash: { $in: hashes } })
+          .select("infoHash name")
+          .lean()
+      : [];
+    const names = new Map(
+      torrents.map((torrent) => [torrent.infoHash, torrent.name]),
+    );
+
+    const active = await Progress.find({
+      userId: user._id,
+      peerId: { $exists: true },
+    })
+      .select("infoHash left")
+      .lean();
+    const activeByHash = new Map();
+    for (const record of active) {
+      const current = activeByHash.get(record.infoHash) ?? {
+        seeding: false,
+        leeching: false,
+      };
+      if (Number(record.left) === 0) current.seeding = true;
+      else current.leeching = true;
+      activeByHash.set(record.infoHash, current);
+    }
+    const activeHashes = [...activeByHash.keys()];
+    const activeTorrents = activeHashes.length
+      ? await Torrent.find({ infoHash: { $in: activeHashes } })
+          .select("infoHash name")
+          .lean()
+      : [];
+    for (const torrent of activeTorrents) {
+      names.set(torrent.infoHash, torrent.name);
+    }
+
+    const seeding = [];
+    const leeching = [];
+    for (const [infoHash, state] of activeByHash) {
+      const entry = { infoHash, name: names.get(infoHash) ?? infoHash };
+      if (state.seeding) seeding.push(entry);
+      if (state.leeching) leeching.push(entry);
+    }
+
+    const withNames = details.map((snatch) => ({
+      ...snatch,
+      name: names.get(snatch.infoHash) ?? snatch.infoHash,
+    }));
+    const warnings = withNames
+      .filter((snatch) => !snatch.isHnr && !snatch.ratioOk && !snatch.seededEnough)
+      .sort((a, b) => a.graceEndsAt - b.graceEndsAt)
+      .slice(0, 10);
+    const currentHnrs = withNames
+      .filter((snatch) => snatch.isHnr)
+      .sort((a, b) => a.graceEndsAt - b.graceEndsAt)
+      .slice(0, 10);
+    const recentSnatches = [...withNames]
+      .sort((a, b) => (b.snatchedAt ?? 0) - (a.snatchedAt ?? 0))
+      .slice(0, 10);
+
+    res.json({
+      ...ratioStats,
+      bp: Number(user.bonusPoints ?? 0),
+      hitnruns,
+      snatches: details.length,
+      seeding: seeding.slice(0, 25),
+      leeching: leeching.slice(0, 25),
+      warnings,
+      currentHnrs,
+      recentSnatches,
     });
   } catch (e) {
     next(e);
