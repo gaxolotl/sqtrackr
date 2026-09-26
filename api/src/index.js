@@ -243,6 +243,9 @@ validateConfig(config)
         ),
         avatarMaxSizeKb: Number(process.env.SQ_AVATAR_MAX_SIZE_KB || 512),
         allowGifAvatars: process.env.SQ_ALLOW_GIF_AVATARS !== "false",
+        forumEnabled: process.env.SQ_ENABLE_FORUM !== "false",
+        announcementsEnabled: process.env.SQ_ENABLE_ANNOUNCEMENTS !== "false",
+        rssEnabled: process.env.SQ_ENABLE_RSS !== "false",
       });
     });
     app.get("/user/:username/avatar", serveAvatar);
@@ -259,7 +262,13 @@ validateConfig(config)
     app.post("/verify-email", authLimiter, verifyUserEmail);
 
     // rss feed (auth handled in cookies)
-    app.get("/rss", rssFeed(tracker));
+    app.get("/rss", (req, res, next) => {
+      if (process.env.SQ_ENABLE_RSS === "false") {
+        res.status(403).send("RSS is disabled");
+        return;
+      }
+      rssFeed(tracker)(req, res, next);
+    });
 
     // torrent file download (can download without auth, will not be able to announce)
     app.get("/torrent/download/:infoHash/:userId", downloadTorrent);

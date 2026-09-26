@@ -117,6 +117,12 @@ module.exports = {
     SQ_AVATAR_MAX_SIZE_KB: 512,
     SQ_ALLOW_GIF_AVATARS: true,
 
+    // Set any of these to false to disable the section without deleting
+    // its data. Disabled sections return 403 and hide from navigation.
+    SQ_ENABLE_FORUM: true,
+    SQ_ENABLE_ANNOUNCEMENTS: true,
+    SQ_ENABLE_RSS: true,
+
     // The URL of your tracker site.
     // For local development, this should be `http://127.0.0.1:3000`.
     SQ_BASE_URL: "https://sqtracker.dev",

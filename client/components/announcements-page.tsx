@@ -4,15 +4,19 @@ import Link from "next/link";
 import { ArrowRight, Pin, Plus } from "lucide-react";
 import { useAuth } from "@/components/auth-context";
 import { ApiState, PageHeader, SignInRequired } from "@/components/ui";
+import { FeatureDisabled } from "@/components/feature-disabled";
 import { useApiData } from "@/hooks/use-api-data";
+import { useTrackerConfig } from "@/hooks/use-tracker-config";
 import { formatDateTime } from "@/lib/format";
 import type { Announcement } from "@/lib/types";
 
 export function AnnouncementsPage() {
   const { session } = useAuth();
+  const { config } = useTrackerConfig();
   const pinned = useApiData<Announcement[]>(session ? "/announcements/pinned" : null);
   const latest = useApiData<Announcement[]>(session ? "/announcements/page/0" : null);
   if (!session) return <main className="page"><SignInRequired /></main>;
+  if (!config.announcementsEnabled) return <FeatureDisabled name="Announcements" />;
   const items = [...(pinned.data ?? []), ...(latest.data ?? [])];
   const error = pinned.error || latest.error;
 

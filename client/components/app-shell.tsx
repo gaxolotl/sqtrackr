@@ -194,7 +194,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ? []
             : [{ label: t("register"), href: "/register", icon: UserPlus }]),
         ];
-  const visiblePrimaryItems = session ? primaryItems : [];
+  const featureFlags: Record<string, boolean> = {
+    "/forum": config.forumEnabled,
+    "/announcements": config.announcementsEnabled,
+    "/rss": config.rssEnabled,
+  };
+  const visiblePrimaryItems = session
+    ? primaryItems.filter((item) => featureFlags[item.href] ?? true)
+    : [];
 
   const browserTitle = config.showPageInTitle
     ? `${config.siteName} • ${plugins.resolveTitle(pathname) ?? t(pageTitleKey(pathname))}`

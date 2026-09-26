@@ -32,6 +32,10 @@ const limiter = ratelimit({
 });
 
 export default () => {
+  if (process.env.SQ_ENABLE_ANNOUNCEMENTS === "false") {
+    router.use((req, res) => res.status(403).send("Announcements are disabled"));
+    return router;
+  }
   router.post("/new", limiter, createAnnouncement);
   router.get("/pinned", limiter, getPinnedAnnouncements);
   router.get("/latest", limiter, getLatestAnnouncement);
