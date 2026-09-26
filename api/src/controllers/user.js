@@ -9,6 +9,8 @@ import Invite from "../schema/invite.js";
 import Progress from "../schema/progress.js";
 import Snatch from "../schema/snatch.js";
 import Torrent from "../schema/torrent.js";
+import ApiToken from "../schema/apiToken.js";
+import { getAnnounceUrl } from "../utils/trackerUrl.js";
 import { getTorrentsPage } from "./torrent.js";
 import { getUserRatio } from "../utils/ratio.js";
 import { getSnatchDetails, getUserHitNRuns } from "../utils/hitnrun.js";
@@ -1042,6 +1044,115 @@ export const getUserRole = async (req, res, next) => {
   try {
     const user = await User.findOne({ _id: req.userId }).lean();
     res.send(user.role);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const listApiTokens = async (req, res, next) => {
+  try {
+    const tokens = await ApiToken.find({ userId: req.userId, revoked: false })
+      .select("name prefix created lastUsedAt")
+      .sort({ created: -1 })
+      .lean();
+    res.json(tokens);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const createApiToken = async (req, res, next) => {
+  try {
+    const name = String(req.body?.name ?? "").trim().slice(0, 100);
+    if (!name) {
+      res.status(400).send("A token name is required");
+      return;
+    }
+    const existing = await ApiToken.countDocuments({
+      userId: req.userId,
+      revoked: false,
+    });
+    if (existing >= 10) {
+      res.status(409).send("Too many API tokens (maximum 10)");
+      return;
+    }
+    const raw = `sq_${crypto.randomBytes(24).toString("hex")}`;
+    const tokenHash = crypto.createHash("sha256").update(raw).digest("hex");
+    const created = await new ApiToken({
+      userId: req.userId,
+      name,
+      tokenHash,
+      prefix: raw.slice(0, 11),
+      created: Date.now(),
+      revoked: false,
+    }).save();
+    res.status(200).json({
+      _id: created._id,
+      name,
+      prefix: created.prefix,
+      created: created.created,
+      token: raw,
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const revokeApiToken = async (req, res, next) => {
+  try {
+    const { tokenId } = req.params;
+    if (!mongoose.isValidObjectId(tokenId)) {
+      res.status(404).send("API token does not exist");
+      return;
+    }
+    const token = await ApiToken.findOneAndUpdate(
+      { _id: tokenId, userId: req.userId, revoked: false },
+      { $set: { revoked: true } },
+    ).lean();
+    if (!token) {
+      res.status(404).send("API token does not exist");
+      return;
+    }
+    res.sendStatus(200);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const rotateAnnounceUid = async (req, res, next) => {
+  try {
+    let uid = "";
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const candidate = crypto.randomBytes(16).toString("hex");
+      const collision = await User.findOne({ uid: candidate }).lean();
+      if (!collision) {
+        uid = candidate;
+        break;
+      }
+    }
+    if (!uid) {
+      res.status(500).send("Could not generate a new announce key");
+      return;
+    }
+    await User.findOneAndUpdate({ _id: req.userId }, { $set: { uid } });
+    res.status(200).json({ uid, announceUrl: getAnnounceUrl(uid) });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const signOutEverywhere = async (req, res, next) => {
+  try {
+    await User.findOneAndUpdate(
+      { _id: req.userId },
+      {
+        $set: {
+          pwdVersion: crypto.randomBytes(24).toString("hex"),
+          pwdVersionUpdatedAt: Date.now(),
+        },
+      },
+    );
+    res.sendStatus(200);
   } catch (e) {
     next(e);
   }

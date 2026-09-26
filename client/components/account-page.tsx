@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Copy, KeyRound, ShieldCheck, Ticket, Upload } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { useAuth } from "@/components/auth-context";
@@ -16,6 +17,14 @@ import { useApiData } from "@/hooks/use-api-data";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import type { Invite, UserWarning } from "@/lib/types";
+
+type ApiTokenMeta = {
+  _id: string;
+  name: string;
+  prefix: string;
+  created: number;
+  lastUsedAt?: number;
+};
 import { UserAvatar } from "@/components/user-avatar";
 import { useTrackerConfig } from "@/hooks/use-tracker-config";
 
@@ -37,11 +46,17 @@ type EditableProfile = {
 };
 
 export function AccountPage() {
-  const { session } = useAuth();
+  const { session, logout } = useAuth();
+  const router = useRouter();
   const stats = useApiData<AccountStats>(session ? "/account/get-stats" : null);
   const warnings = useApiData<UserWarning[]>(
     session ? "/account/warnings" : null,
   );
+  const tokens = useApiData<ApiTokenMeta[]>(
+    session ? "/account/tokens" : null,
+  );
+  const [newToken, setNewToken] = useState<string | null>(null);
+  const [newAnnounceUrl, setNewAnnounceUrl] = useState<string | null>(null);
   const invites = useApiData<Invite[]>(session ? "/account/invites" : null);
   const profile = useApiData<EditableProfile>(
     session ? "/account/profile" : null,
@@ -102,6 +117,90 @@ export function AccountPage() {
           : "Could not send the appeal.",
       );
     }
+  }
+
+  async function createToken(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const name = String(new FormData(form).get("name") ?? "").trim();
+    if (!name) return;
+    setMessage("");
+    setActionError("");
+    try {
+      const result = await apiFetch<{ token: string }>("/account/tokens", {
+        method: "POST",
+        body: JSON.stringify({ name }),
+      });
+      form.reset();
+      setNewToken(result.token);
+      setMessage("API token created. Copy it now, it will not be shown again.");
+      tokens.reload();
+    } catch (requestError) {
+      setActionError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not create the token.",
+      );
+    }
+  }
+
+  async function revokeToken(id: string) {
+    if (!window.confirm("Revoke this API token?")) return;
+    setMessage("");
+    setActionError("");
+    try {
+      await apiFetch(`/account/tokens/${id}`, { method: "DELETE" });
+      setMessage("API token revoked.");
+      tokens.reload();
+    } catch (requestError) {
+      setActionError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not revoke the token.",
+      );
+    }
+  }
+
+  async function rotateUid() {
+    if (
+      !window.confirm(
+        "Rotate your announce key? You must re-download torrents afterwards.",
+      )
+    )
+      return;
+    setMessage("");
+    setActionError("");
+    setNewAnnounceUrl(null);
+    try {
+      const result = await apiFetch<{ announceUrl: string }>(
+        "/account/rotate-uid",
+        { method: "POST" },
+      );
+      setNewAnnounceUrl(result.announceUrl);
+      setMessage("Announce key rotated. Re-download your torrents.");
+    } catch (requestError) {
+      setActionError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not rotate the announce key.",
+      );
+    }
+  }
+
+  async function signOutEverywhere() {
+    if (
+      !window.confirm(
+        "Sign out all devices, including this one? You will need to log in again.",
+      )
+    )
+      return;
+    try {
+      await apiFetch("/account/sign-out-all", { method: "POST" });
+    } catch {
+      // The session may already be invalid; continue to log out locally.
+    }
+    logout();
+    router.push("/login");
   }
 
   async function beginTotp() {
@@ -531,6 +630,77 @@ export function AccountPage() {
             </button>
           </div>
         </form>
+      </section>
+      <section className="account-section">
+        <h2>API tokens</h2>
+        <p>Tokens authenticate API requests as you. They can be revoked any time.</p>
+        {newToken ? (
+          <p>
+            New token: <strong>{newToken}</strong>
+          </p>
+        ) : null}
+        {tokens.data?.length ? (
+          <div className="feed-list">
+            {tokens.data.map((token) => (
+              <article className="feed-card" key={token._id}>
+                <div>
+                  <h2>{token.name}</h2>
+                  <p>
+                    {token.prefix}… · Created {formatDateTime(token.created)}
+                    {token.lastUsedAt
+                      ? ` · Last used ${formatDateTime(token.lastUsedAt)}`
+                      : " · Never used"}
+                  </p>
+                </div>
+                <button
+                  className="secondary-button compact-button"
+                  type="button"
+                  onClick={() => revokeToken(token._id)}
+                >
+                  Revoke
+                </button>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p>No API tokens yet.</p>
+        )}
+        <form className="inline-form" onSubmit={createToken}>
+          <input
+            name="name"
+            required
+            maxLength={100}
+            placeholder="Token name, e.g. autobrr"
+            aria-label="Token name"
+          />
+          <button className="primary-button" type="submit">
+            Create token
+          </button>
+        </form>
+      </section>
+      <section className="account-section">
+        <h2>Sessions and announce key</h2>
+        {newAnnounceUrl ? (
+          <p>
+            New announce URL: <strong>{newAnnounceUrl}</strong>
+          </p>
+        ) : null}
+        <div className="candidate-actions">
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={rotateUid}
+          >
+            <Copy aria-hidden="true" /> Rotate announce key
+          </button>
+          <button
+            className="secondary-button danger-action"
+            type="button"
+            onClick={signOutEverywhere}
+          >
+            Sign out everywhere
+          </button>
+        </div>
       </section>
       <ActionMessage message={message} error={actionError} />
     </main>

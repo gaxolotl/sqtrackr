@@ -2,6 +2,7 @@ import express from "express";
 import ratelimit from "express-rate-limit";
 import {
   appealWarning,
+  createApiToken,
   deleteSavedSearch,
   fetchInvites,
   generateInvite,
@@ -9,6 +10,10 @@ import {
   getDashboard,
   getOwnWarnings,
   getSavedSearches,
+  listApiTokens,
+  revokeApiToken,
+  rotateAnnounceUid,
+  signOutEverywhere,
   getUserStats,
   getUserRole,
   getUserVerifiedEmailStatus,
@@ -58,6 +63,11 @@ export default (tracker, mail) => {
   router.delete("/searches/:searchId", limiter, deleteSavedSearch);
   router.get("/warnings", limiter, getOwnWarnings);
   router.post("/warnings/:warningId/appeal", limiter, appealWarning);
+  router.get("/tokens", limiter, listApiTokens);
+  router.post("/tokens", limiter, createApiToken);
+  router.delete("/tokens/:tokenId", limiter, revokeApiToken);
+  router.post("/rotate-uid", limiter, rotateAnnounceUid);
+  router.post("/sign-out-all", limiter, signOutEverywhere);
   router.get("/get-role", limiter, getUserRole);
   router.get("/get-verified", limiter, getUserVerifiedEmailStatus);
   router.post("/buy", limiter, buyItems);

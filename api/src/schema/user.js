@@ -9,6 +9,7 @@ const User = new mongoose.Schema({
     type: String,
     default: () => crypto.randomBytes(24).toString("hex"),
   },
+  pwdVersionUpdatedAt: Number,
   uid: String,
   torrents: Object,
   created: Number,
