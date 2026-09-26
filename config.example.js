@@ -65,6 +65,12 @@ module.exports = {
     // A user has committed a hit'n'run when a torrent is fully downloaded and not seeded to a 1:1 ratio.
     SQ_MAXIMUM_HIT_N_RUNS: 1,
 
+    // Minimum seeding time in hours to avoid a hit'n'run (reaching 1:1 ratio also clears it).
+    SQ_MIN_SEEDTIME_HOURS: 72,
+
+    // Hours after snatching before an unseeded torrent counts as a hit'n'run.
+    SQ_HNR_GRACE_HOURS: 24,
+
     // A map of torrent categories that can be selected when uploading.
     // Each has an array of zero or more sources available within that category.
     SQ_TORRENT_CATEGORIES: {

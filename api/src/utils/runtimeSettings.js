@@ -29,6 +29,8 @@ export const runtimeSettingsSchema = yup
     SQ_TORRENT_PREMODERATION: yup.boolean().required(),
     SQ_MINIMUM_RATIO: yup.number().min(-1).max(100).required(),
     SQ_MAXIMUM_HIT_N_RUNS: yup.number().integer().min(-1).max(10000).required(),
+    SQ_MIN_SEEDTIME_HOURS: yup.number().min(0).max(8760).required(),
+    SQ_HNR_GRACE_HOURS: yup.number().min(0).max(8760).required(),
     SQ_TORRENT_CATEGORIES: yup.object().required(),
     SQ_BP_EARNED_PER_GB: yup.number().min(0).max(100000).required(),
     SQ_BP_EARNED_PER_FILLED_REQUEST: yup.number().min(0).max(100000).required(),
@@ -90,6 +92,8 @@ const booleanKeys = new Set([
 const numberKeys = new Set([
   "SQ_MINIMUM_RATIO",
   "SQ_MAXIMUM_HIT_N_RUNS",
+  "SQ_MIN_SEEDTIME_HOURS",
+  "SQ_HNR_GRACE_HOURS",
   "SQ_BP_EARNED_PER_GB",
   "SQ_BP_EARNED_PER_FILLED_REQUEST",
   "SQ_BP_COST_PER_INVITE",
@@ -110,6 +114,8 @@ const numberKeys = new Set([
 ]);
 
 const fallbackValues = {
+  SQ_MIN_SEEDTIME_HOURS: "72",
+  SQ_HNR_GRACE_HOURS: "24",
   SQ_AVATAR_MAX_RESOLUTION: "512",
   SQ_AVATAR_MAX_SIZE_KB: "512",
   SQ_ALLOW_GIF_AVATARS: "true",

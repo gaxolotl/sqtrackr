@@ -6,6 +6,7 @@ import qrcode from "qrcode";
 import User from "../schema/user.js";
 import Invite from "../schema/invite.js";
 import Progress from "../schema/progress.js";
+import Snatch from "../schema/snatch.js";
 import { getTorrentsPage } from "./torrent.js";
 import { getUserRatio } from "../utils/ratio.js";
 import { getUserHitNRuns } from "../utils/hitnrun.js";
@@ -810,6 +811,7 @@ export const fetchUser = (tracker) => async (req, res, next) => {
     user.ratio = ratio;
 
     user.hitnruns = await getUserHitNRuns(user._id);
+    user.snatches = await Snatch.countDocuments({ userId: user._id });
 
     const { torrents } = await getTorrentsPage({
       uploadedBy: user._id,
@@ -835,8 +837,14 @@ export const getUserStats = async (req, res, next) => {
 
     const ratioStats = await getUserRatio(user._id);
     const hitnruns = await getUserHitNRuns(user._id);
+    const snatches = await Snatch.countDocuments({ userId: user._id });
 
-    res.json({ ...ratioStats, bp: Number(user.bonusPoints ?? 0), hitnruns });
+    res.json({
+      ...ratioStats,
+      bp: Number(user.bonusPoints ?? 0),
+      hitnruns,
+      snatches,
+    });
   } catch (e) {
     next(e);
   }

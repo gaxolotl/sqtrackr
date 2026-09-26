@@ -160,6 +160,7 @@ export type UserProfile = {
   bonusPoints?: number;
   ratio?: number;
   hitnruns?: number;
+  snatches?: number;
   downloaded?: { bytes?: number; count?: number };
   uploaded?: { bytes?: number; count?: number };
   torrents?: Torrent[];

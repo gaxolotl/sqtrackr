@@ -23,6 +23,7 @@ type AccountStats = {
   bp: number;
   ratio: number;
   hitnruns: number;
+  snatches: number;
   uploaded?: number;
   downloaded?: number;
 };

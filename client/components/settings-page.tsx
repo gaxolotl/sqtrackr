@@ -37,6 +37,8 @@ type AdminSettings = {
   SQ_TORRENT_PREMODERATION: boolean;
   SQ_MINIMUM_RATIO: number;
   SQ_MAXIMUM_HIT_N_RUNS: number;
+  SQ_MIN_SEEDTIME_HOURS: number;
+  SQ_HNR_GRACE_HOURS: number;
   SQ_TORRENT_CATEGORIES: Record<string, string[]>;
   SQ_BP_EARNED_PER_GB: number;
   SQ_BP_EARNED_PER_FILLED_REQUEST: number;
@@ -56,6 +58,8 @@ type AdminSettings = {
 const numberFields = [
   "SQ_MINIMUM_RATIO",
   "SQ_MAXIMUM_HIT_N_RUNS",
+  "SQ_MIN_SEEDTIME_HOURS",
+  "SQ_HNR_GRACE_HOURS",
   "SQ_BP_EARNED_PER_GB",
   "SQ_BP_EARNED_PER_FILLED_REQUEST",
   "SQ_BP_COST_PER_INVITE",
@@ -472,6 +476,24 @@ export function SettingsPage() {
                     type="number"
                     min="-1"
                     defaultValue={settings.data.SQ_MAXIMUM_HIT_N_RUNS}
+                    required
+                  />
+                </Field>
+                <Field label="Minimum seedtime hours">
+                  <input
+                    name="SQ_MIN_SEEDTIME_HOURS"
+                    type="number"
+                    min="0"
+                    defaultValue={settings.data.SQ_MIN_SEEDTIME_HOURS}
+                    required
+                  />
+                </Field>
+                <Field label="Hit 'n' run grace hours">
+                  <input
+                    name="SQ_HNR_GRACE_HOURS"
+                    type="number"
+                    min="0"
+                    defaultValue={settings.data.SQ_HNR_GRACE_HOURS}
                     required
                   />
                 </Field>
