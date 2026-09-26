@@ -65,6 +65,7 @@ const configSchema = yup
           grey: yup.string().matches(hexRegex),
         }),
         SQ_EXTENSION_BLACKLIST: yup.array().of(yup.string()).min(0),
+        SQ_CLIENT_BLACKLIST: yup.array().of(yup.string()).min(0),
         SQ_SITE_DEFAULT_LOCALE: yup
           .string()
           .oneOf(["en", "bg", "es", "it", "ru", "de", "zh", "eo", "fr"]),

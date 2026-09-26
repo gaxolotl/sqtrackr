@@ -41,6 +41,17 @@ const handleAnnounce = async (req, res) => {
 
   const infoHash = binaryToHex(params.info_hash);
 
+  // Anti-cheat: deny announces from banned clients (peer-ID prefix match).
+  const peerId = params.peer_id ?? "";
+  const clientBlacklist = JSON.parse(process.env.SQ_CLIENT_BLACKLIST ?? "[]");
+  if (clientBlacklist.some((prefix) => prefix && peerId.startsWith(prefix))) {
+    const response = bencode.encode({
+      "failure reason": "Announce denied: Your client is banned.",
+    });
+    res.send(response);
+    return;
+  }
+
   const torrent = await Torrent.findOne({ infoHash }).lean();
 
   // if torrent info hash is not in the database, deny announce
@@ -90,7 +101,6 @@ const handleAnnounce = async (req, res) => {
   const uploaded = Number(params.uploaded);
   const downloaded = params.event === "started" ? 0 : Number(params.downloaded);
 
-  const peerId = params.peer_id;
   const prevProgressRecord = await Progress.findOne({
     userId: user._id,
     peerId: peerId,

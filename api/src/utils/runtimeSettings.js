@@ -40,6 +40,10 @@ export const runtimeSettingsSchema = yup
       .array()
       .of(yup.string().trim().max(20))
       .required(),
+    SQ_CLIENT_BLACKLIST: yup
+      .array()
+      .of(yup.string().trim().max(20))
+      .required(),
     SQ_SITE_DEFAULT_LOCALE: yup
       .string()
       .oneOf(["en", "bg", "es", "it", "ru", "de", "zh", "eo", "fr"])
@@ -70,6 +74,7 @@ export const runtimeSettingsSchema = yup
 const jsonKeys = new Set([
   "SQ_TORRENT_CATEGORIES",
   "SQ_EXTENSION_BLACKLIST",
+  "SQ_CLIENT_BLACKLIST",
   "SQ_CUSTOM_THEME",
 ]);
 const booleanKeys = new Set([

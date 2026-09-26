@@ -45,6 +45,7 @@ type AdminSettings = {
   SQ_SITE_WIDE_FREELEECH: boolean;
   SQ_ALLOW_UNREGISTERED_VIEW: boolean;
   SQ_EXTENSION_BLACKLIST: string[];
+  SQ_CLIENT_BLACKLIST: string[];
   SQ_SITE_DEFAULT_LOCALE: string;
   SQ_CUSTOM_THEME: Record<string, string>;
   SQ_AVATAR_MAX_RESOLUTION: number;
@@ -112,6 +113,8 @@ export function SettingsPage() {
   const [newCategory, setNewCategory] = useState("");
   const [newSource, setNewSource] = useState<Record<number, string>>({});
   const [newExtension, setNewExtension] = useState("");
+  const [blockedClients, setBlockedClients] = useState<string[]>([]);
+  const [newClient, setNewClient] = useState("");
   const [themeColors, setThemeColors] = useState<Record<string, string> | null>(
     null,
   );
@@ -125,6 +128,7 @@ export function SettingsPage() {
       ),
     );
     setBlockedExtensions([...settings.data.SQ_EXTENSION_BLACKLIST]);
+    setBlockedClients([...(settings.data.SQ_CLIENT_BLACKLIST ?? [])]);
     setThemeColors({ ...settings.data.SQ_CUSTOM_THEME });
   }
   const editorsReady = editorSource !== null && themeColors !== null;
@@ -214,6 +218,7 @@ export function SettingsPage() {
         SQ_SITE_DEFAULT_LOCALE: String(form.get("SQ_SITE_DEFAULT_LOCALE")),
         SQ_TORRENT_CATEGORIES: categoryRecord,
         SQ_EXTENSION_BLACKLIST: blockedExtensions,
+        SQ_CLIENT_BLACKLIST: blockedClients,
         SQ_CUSTOM_THEME: customTheme,
         SQ_ALLOW_ANONYMOUS_UPLOADS: form.has("SQ_ALLOW_ANONYMOUS_UPLOADS"),
         SQ_TORRENT_PREMODERATION: form.has("SQ_TORRENT_PREMODERATION"),
@@ -761,6 +766,65 @@ export function SettingsPage() {
                     }}
                   >
                     <Plus aria-hidden="true" /> Add extension
+                  </button>
+                </div>
+              </div>
+              <div className="field">
+                <span>Banned client prefixes</span>
+                <small>
+                  Announces from clients whose peer ID starts with one of
+                  these prefixes are denied. Example: -AZ3020-
+                </small>
+                {blockedClients.length ? (
+                  <ul className="source-list">
+                    {blockedClients.map((client) => (
+                      <li className="source-row" key={client}>
+                        <span>{client}</span>
+                        <button
+                          className="icon-action compact-button"
+                          type="button"
+                          onClick={() =>
+                            setBlockedClients((current) =>
+                              current.filter((candidate) => candidate !== client),
+                            )
+                          }
+                          aria-label={`Remove banned client ${client}`}
+                        >
+                          <X aria-hidden="true" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="source-empty">No banned clients.</p>
+                )}
+                <div className="source-add">
+                  <input
+                    aria-label="New banned client prefix"
+                    placeholder="-AZ3020-"
+                    maxLength={20}
+                    value={newClient}
+                    onChange={(event) => setNewClient(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") return;
+                      event.preventDefault();
+                      const value = newClient.trim();
+                      if (!value || blockedClients.includes(value)) return;
+                      setBlockedClients((current) => [...current, value]);
+                      setNewClient("");
+                    }}
+                  />
+                  <button
+                    className="secondary-button compact-button"
+                    type="button"
+                    onClick={() => {
+                      const value = newClient.trim();
+                      if (!value || blockedClients.includes(value)) return;
+                      setBlockedClients((current) => [...current, value]);
+                      setNewClient("");
+                    }}
+                  >
+                    <Plus aria-hidden="true" /> Add client
                   </button>
                 </div>
               </div>

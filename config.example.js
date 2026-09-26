@@ -99,6 +99,10 @@ module.exports = {
     // An array of blacklisted file extensions. Torrents containing files with these extensions will fail to upload.
     SQ_EXTENSION_BLACKLIST: ["exe"],
 
+    // An array of banned BitTorrent client peer-ID prefixes (e.g. "-AZ3020-").
+    // Announces from matching clients are denied. Empty array disables.
+    SQ_CLIENT_BLACKLIST: [],
+
     // Default site locale. See `client/locales/index.js` for available options.
     SQ_SITE_DEFAULT_LOCALE: "en",
 
