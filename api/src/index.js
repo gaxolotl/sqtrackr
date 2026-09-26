@@ -26,6 +26,7 @@ import {
   forumRoutes,
   messageRoutes,
   moderationRoutes,
+  notificationRoutes,
 } from "./routes/index.js";
 import {
   register,
@@ -304,6 +305,7 @@ validateConfig(config)
     app.use("/forum", forumRoutes());
     app.use("/messages", messageRoutes());
     app.use("/moderation", moderationRoutes());
+    app.use("/notifications", notificationRoutes());
 
     app.use((err, req, res, next) => {
       if (res.headersSent) {

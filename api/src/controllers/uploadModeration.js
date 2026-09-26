@@ -9,6 +9,7 @@ import {
   validateContentText,
 } from "../utils/contentLimits.js";
 import { sendSystemMessage } from "../utils/directMessage.js";
+import pushNotification from "../utils/notify.js";
 import { canModerate } from "../utils/roles.js";
 
 const pageSize = 25;
@@ -65,6 +66,15 @@ const notifyDecision = async (submission) => {
     recipientId: submission.uploadedBy,
     body,
     notificationKey: `torrent-submission:${submission._id}:${submission.status}`,
+  });
+  await pushNotification(submission.uploadedBy, {
+    type: "submission",
+    title: approved
+      ? `Upload "${submission.name}" was approved`
+      : `Upload "${submission.name}" was rejected`,
+    link: approved
+      ? `/torrent/${submission.infoHash}`
+      : `/moderation/uploads/${submission._id}`,
   });
   await TorrentSubmission.updateOne(
     { _id: submission._id, notifiedAt: { $exists: false } },

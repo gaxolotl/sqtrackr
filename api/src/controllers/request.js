@@ -7,6 +7,7 @@ import {
   getContentLimits,
   validateContentText,
 } from "../utils/contentLimits.js";
+import pushNotification from "../utils/notify.js";
 
 export const createRequest = async (req, res, next) => {
   try {
@@ -461,6 +462,21 @@ export const acceptCandidate = async (req, res, next) => {
           },
         },
       );
+
+      const contributorIds = [
+        ...new Set(
+          (request.topUps ?? [])
+            .map((topUp) => topUp.userId && String(topUp.userId))
+            .filter(Boolean),
+        ),
+      ].filter((id) => id !== req.userId.toString());
+      for (const contributorId of contributorIds) {
+        await pushNotification(contributorId, {
+          type: "request-filled",
+          title: `Request "${request.title}" was filled`,
+          link: `/requests/${request.index}`,
+        });
+      }
 
       res.status(200).send({ torrent: torrent._id });
     } catch (e) {

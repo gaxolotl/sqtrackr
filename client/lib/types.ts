@@ -204,6 +204,22 @@ export type TrackerRequest = {
   comments?: CommentRecord[];
 };
 
+export type NotificationItem = {
+  _id: string;
+  type: string;
+  title: string;
+  link?: string;
+  read?: boolean;
+  created: number;
+};
+
+export type NotificationPage = {
+  items: NotificationItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 export type Report = {
   _id: string;
   reason: string;

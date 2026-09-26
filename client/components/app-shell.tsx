@@ -13,6 +13,7 @@ import {
 import clientPackage from "@/package.json";
 import {
   BookOpen,
+  Bell,
   ChevronDown,
   CircleUserRound,
   Download,
@@ -41,6 +42,7 @@ import {
 import { FormEvent, useEffect, useState } from "react";
 import { useTrackerConfig } from "@/hooks/use-tracker-config";
 import { useUnreadMessages } from "@/hooks/use-unread-messages";
+import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import { useApiData } from "@/hooks/use-api-data";
 import { canModerate } from "@/lib/api";
 import { UserAvatar } from "@/components/user-avatar";
@@ -54,6 +56,7 @@ const primaryItems = [
   { label: "requests", href: "/requests", icon: MessageSquarePlus },
   { label: "forum", href: "/forum", icon: MessagesSquare },
   { label: "messages", href: "/messages", icon: Mail },
+  { label: "notifications", href: "/notifications", icon: Bell },
   { label: "rss", href: "/rss", icon: Rss },
   { label: "wiki", href: "/wiki", icon: BookOpen },
 ] as const;
@@ -65,6 +68,7 @@ const pageTitleRoutes: Array<[string, MessageKey]> = [
   ["/forum", "forum"],
   ["/login", "login"],
   ["/messages", "messages"],
+  ["/notifications", "notifications"],
   ["/moderation", "moderation"],
   ["/register", "register"],
   ["/reports", "moderation"],
@@ -98,6 +102,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { locale, setLocale, t } = useI18n();
   const { config } = useTrackerConfig();
   const unreadMessages = useUnreadMessages(Boolean(session));
+  const unreadNotifications = useUnreadNotifications(Boolean(session));
   const ownProfile = useApiData<{ avatarUpdated?: number }>(
     session ? "/account/profile" : null,
   );
@@ -211,27 +216,35 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <nav className="sidebar-nav" aria-label="Main navigation">
-            {visiblePrimaryItems.map(({ label, href, icon: Icon }) => (
-              <Link
-                className={`nav-link ${isActive(href) ? "active" : ""}`}
-                href={href}
-                key={label}
-                onClick={() => setMenuOpen(false)}
-              >
-                <span className="nav-label">
-                  {t(label)}
-                  {label === "messages" && unreadMessages > 0 ? (
-                    <span
-                      className="nav-badge"
-                      aria-label={`${unreadMessages} unread messages`}
-                    >
-                      {unreadMessages > 99 ? "99+" : unreadMessages}
-                    </span>
-                  ) : null}
-                </span>
-                <Icon aria-hidden="true" />
-              </Link>
-            ))}
+            {visiblePrimaryItems.map(({ label, href, icon: Icon }) => {
+              const badge =
+                label === "messages"
+                  ? unreadMessages
+                  : label === "notifications"
+                    ? unreadNotifications
+                    : 0;
+              return (
+                <Link
+                  className={`nav-link ${isActive(href) ? "active" : ""}`}
+                  href={href}
+                  key={label}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  <span className="nav-label">
+                    {t(label)}
+                    {badge > 0 ? (
+                      <span
+                        className="nav-badge"
+                        aria-label={`${badge} unread ${label}`}
+                      >
+                        {badge > 99 ? "99+" : badge}
+                      </span>
+                    ) : null}
+                  </span>
+                  <Icon aria-hidden="true" />
+                </Link>
+              );
+            })}
             {plugins.navigation.map((item) => {
               const Icon = item.icon ?? Puzzle;
               return (
