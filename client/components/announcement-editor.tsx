@@ -10,7 +10,7 @@ import {
   PageHeader,
   SignInRequired,
 } from "@/components/ui";
-import { AttachmentPicker } from "@/components/attachment-picker";
+import { LinkPicker } from "@/components/link-picker";
 import { useApiData } from "@/hooks/use-api-data";
 import { useTrackerConfig } from "@/hooks/use-tracker-config";
 import { apiFetch } from "@/lib/api";
@@ -77,7 +77,7 @@ export function AnnouncementEditor({ slug }: { slug?: string }) {
       <Field label="Title"><input name="title" required maxLength={config.contentLimits.title} defaultValue={data?.title} /></Field>
       <Field label="Body">
         <textarea ref={bodyBox} name="body" rows={10} required maxLength={config.contentLimits.body} placeholder="Markdown supported" defaultValue={data?.body} />
-        <AttachmentPicker onInsert={insertAttachment} />
+        <LinkPicker onInsert={insertAttachment} />
       </Field>
       <div className="inline-checks">
         <label className="check-field"><input type="checkbox" name="pinned" defaultChecked={data?.pinned} /> Pin announcement</label>

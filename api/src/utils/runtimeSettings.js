@@ -68,8 +68,6 @@ export const runtimeSettingsSchema = yup
       .required(),
     SQ_AVATAR_MAX_SIZE_KB: yup.number().integer().min(32).max(5120).required(),
     SQ_ALLOW_GIF_AVATARS: yup.boolean().required(),
-    SQ_ATTACHMENTS_ENABLED: yup.boolean().required(),
-    SQ_ATTACHMENT_MAX_SIZE_KB: yup.number().integer().min(64).max(10240).required(),
   })
   .strict()
   .noUnknown()
@@ -90,7 +88,6 @@ const booleanKeys = new Set([
   "SQ_SITE_WIDE_FREELEECH",
   "SQ_ALLOW_UNREGISTERED_VIEW",
   "SQ_ALLOW_GIF_AVATARS",
-  "SQ_ATTACHMENTS_ENABLED",
 ]);
 const numberKeys = new Set([
   "SQ_MINIMUM_RATIO",
@@ -103,7 +100,6 @@ const numberKeys = new Set([
   "SQ_BP_COST_PER_GB",
   "SQ_AVATAR_MAX_RESOLUTION",
   "SQ_AVATAR_MAX_SIZE_KB",
-  "SQ_ATTACHMENT_MAX_SIZE_KB",
   "SQ_CONTENT_MAX_WIDTH",
   "SQ_TORRENT_NAME_MAX_LENGTH",
   "SQ_CONTENT_TITLE_MAX_LENGTH",
@@ -118,8 +114,6 @@ const numberKeys = new Set([
 ]);
 
 const fallbackValues = {
-  SQ_ATTACHMENTS_ENABLED: "true",
-  SQ_ATTACHMENT_MAX_SIZE_KB: "2048",
   SQ_MIN_SEEDTIME_HOURS: "72",
   SQ_HNR_GRACE_HOURS: "24",
   SQ_AVATAR_MAX_RESOLUTION: "512",

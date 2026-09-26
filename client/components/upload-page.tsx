@@ -20,7 +20,7 @@ import {
   PageHeader,
   SignInRequired,
 } from "@/components/ui";
-import { AttachmentPicker } from "@/components/attachment-picker";
+import { LinkPicker } from "@/components/link-picker";
 import { apiFetch, apiOrigin } from "@/lib/api";
 import { configCategoryOptions, type CategoryOption } from "@/lib/categories";
 import { useTrackerConfig } from "@/hooks/use-tracker-config";
@@ -566,7 +566,7 @@ export function UploadPage() {
             value={description}
             onChange={(event) => setDescription(event.target.value)}
           />
-          <AttachmentPicker
+          <LinkPicker
             onInsert={(markdown) =>
               setDescription((current) => `${current}${markdown}`)
             }

@@ -10,7 +10,7 @@ import {
   PageHeader,
   SignInRequired,
 } from "@/components/ui";
-import { AttachmentPicker } from "@/components/attachment-picker";
+import { LinkPicker } from "@/components/link-picker";
 import { useApiData } from "@/hooks/use-api-data";
 import { useTrackerConfig } from "@/hooks/use-tracker-config";
 import { apiFetch, ApiError } from "@/lib/api";
@@ -126,7 +126,7 @@ export function WikiEditor({
         )}
       </Field>
       <Field label="Title"><input name="title" required maxLength={config.contentLimits.title} defaultValue={data?.page?.title} /></Field>
-      <Field label="Body"><textarea ref={bodyBox} name="body" rows={12} required maxLength={config.contentLimits.body} placeholder="Markdown supported" defaultValue={data?.page?.body} /><AttachmentPicker onInsert={insertAttachment} /></Field>
+      <Field label="Body"><textarea ref={bodyBox} name="body" rows={12} required maxLength={config.contentLimits.body} placeholder="Markdown supported" defaultValue={data?.page?.body} /><LinkPicker onInsert={insertAttachment} /></Field>
       <label className="check-field"><input type="checkbox" name="public" defaultChecked={slug ? Boolean(data?.page?.public) : true} /> Visible to unregistered visitors when public viewing is enabled</label>
       <ActionMessage error={error} />
       <div className="form-actions">

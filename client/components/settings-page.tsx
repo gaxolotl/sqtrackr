@@ -53,8 +53,6 @@ type AdminSettings = {
   SQ_AVATAR_MAX_RESOLUTION: number;
   SQ_AVATAR_MAX_SIZE_KB: number;
   SQ_ALLOW_GIF_AVATARS: boolean;
-  SQ_ATTACHMENTS_ENABLED: boolean;
-  SQ_ATTACHMENT_MAX_SIZE_KB: number;
 };
 
 const numberFields = [
@@ -68,7 +66,6 @@ const numberFields = [
   "SQ_BP_COST_PER_GB",
   "SQ_AVATAR_MAX_RESOLUTION",
   "SQ_AVATAR_MAX_SIZE_KB",
-  "SQ_ATTACHMENT_MAX_SIZE_KB",
   "SQ_CONTENT_MAX_WIDTH",
   "SQ_TORRENT_NAME_MAX_LENGTH",
   "SQ_CONTENT_TITLE_MAX_LENGTH",
@@ -237,7 +234,6 @@ export function SettingsPage() {
         SQ_SITE_WIDE_FREELEECH: form.has("SQ_SITE_WIDE_FREELEECH"),
         SQ_ALLOW_UNREGISTERED_VIEW: form.has("SQ_ALLOW_UNREGISTERED_VIEW"),
         SQ_ALLOW_GIF_AVATARS: form.has("SQ_ALLOW_GIF_AVATARS"),
-        SQ_ATTACHMENTS_ENABLED: form.has("SQ_ATTACHMENTS_ENABLED"),
       };
       for (const key of numberFields) next[key] = Number(form.get(key));
       const saved = await apiFetch<AdminSettings>("/admin/settings", {
@@ -278,8 +274,6 @@ export function SettingsPage() {
         avatarMaxResolution: saved.SQ_AVATAR_MAX_RESOLUTION,
         avatarMaxSizeKb: saved.SQ_AVATAR_MAX_SIZE_KB,
         allowGifAvatars: saved.SQ_ALLOW_GIF_AVATARS,
-        attachmentsEnabled: saved.SQ_ATTACHMENTS_ENABLED,
-        attachmentMaxSizeKb: saved.SQ_ATTACHMENT_MAX_SIZE_KB,
       });
       setMessage("Site settings saved and applied.");
     } catch (requestError) {
@@ -938,26 +932,6 @@ export function SettingsPage() {
                   />{" "}
                   Allow animated GIF uploads
                 </label>
-                <label>
-                  <input
-                    name="SQ_ATTACHMENTS_ENABLED"
-                    type="checkbox"
-                    defaultChecked={settings.data.SQ_ATTACHMENTS_ENABLED}
-                  />{" "}
-                  Allow file attachments (images, .txt, .md) linked from posts
-                </label>
-              </div>
-              <div className="settings-grid">
-                <Field label="Maximum attachment size (KB)">
-                  <input
-                    name="SQ_ATTACHMENT_MAX_SIZE_KB"
-                    type="number"
-                    min="64"
-                    max="10240"
-                    defaultValue={settings.data.SQ_ATTACHMENT_MAX_SIZE_KB}
-                    required
-                  />
-                </Field>
               </div>
             </section>
 

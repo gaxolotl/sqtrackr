@@ -14,7 +14,7 @@ import {
   SignInRequired,
 } from "@/components/ui";
 import { useApiData } from "@/hooks/use-api-data";
-import { AttachmentPicker } from "@/components/attachment-picker";
+import { LinkPicker } from "@/components/link-picker";
 import { useTrackerConfig } from "@/hooks/use-tracker-config";
 import { apiFetch, canModerate } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
@@ -527,7 +527,7 @@ export function ForumThreadPage({ threadId }: { threadId: string }) {
                       maxLength={Math.min(config.contentLimits.body, 50000)}
                       required
                     />
-                    <AttachmentPicker onInsert={insertReplyAttachment} />
+                    <LinkPicker onInsert={insertReplyAttachment} />
                   </Field>
                   <div className="form-actions">
                     <button

@@ -74,8 +74,6 @@ const configSchema = yup
         SQ_AVATAR_MAX_RESOLUTION: yup.number().integer().min(64).max(2048),
         SQ_AVATAR_MAX_SIZE_KB: yup.number().integer().min(32).max(5120),
         SQ_ALLOW_GIF_AVATARS: yup.boolean(),
-        SQ_ATTACHMENTS_ENABLED: yup.boolean(),
-        SQ_ATTACHMENT_MAX_SIZE_KB: yup.number().integer().min(64).max(10240),
         SQ_BASE_URL: yup.string().matches(httpRegex).required(),
         SQ_API_URL: yup.string().matches(httpRegex).required(),
         SQ_ANNOUNCE_URL: yup.string().matches(httpRegex),

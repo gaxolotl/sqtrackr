@@ -4,7 +4,7 @@ import Link from "next/link";
 import { MessageSquare } from "lucide-react";
 import { FormEvent, useRef, useState } from "react";
 import { ActionMessage, Field } from "@/components/ui";
-import { AttachmentPicker } from "@/components/attachment-picker";
+import { LinkPicker } from "@/components/link-picker";
 import { useTrackerConfig } from "@/hooks/use-tracker-config";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
@@ -46,7 +46,7 @@ export function CommentThread({ comments = [], endpoint, disabled = false, onPos
       <form className="comment-form" onSubmit={submit}>
         <Field label="Post a comment"><textarea ref={commentBox} name="comment" rows={5} required maxLength={config.contentLimits.comment} disabled={disabled} placeholder={disabled ? "Comments are disabled." : "Write a comment…"} /></Field>
         <ActionMessage error={error} />
-        <div className="form-actions"><AttachmentPicker onInsert={insertAttachment} /><button className="primary-button" type="submit" disabled={disabled || submitting}>{submitting ? "Posting…" : "Post"}</button></div>
+        <div className="form-actions"><LinkPicker onInsert={insertAttachment} /><button className="primary-button" type="submit" disabled={disabled || submitting}>{submitting ? "Posting…" : "Post"}</button></div>
       </form>
       {comments.length ? <div className="comments-list rendered-comments">{comments.map((comment) => <article className="comment" key={comment._id}><div className="comment-meta"><p><MessageSquare aria-hidden="true" /> Comment by <Link href={`/user/${comment.user?.username ?? "unknown"}`}>{comment.user?.username ?? "Unknown user"}</Link></p><time>{formatDateTime(comment.created)}</time></div><p className="comment-body">{comment.comment}</p></article>)}</div> : null}
     </section>

@@ -1,5 +1,4 @@
 import accountRoutes from "./account.js";
-import attachmentRoutes from "./attachments.js";
 import userRoutes from "./user.js";
 import torrentRoutes from "./torrent.js";
 import announcementRoutes from "./announcement.js";
@@ -15,7 +14,6 @@ import notificationRoutes from "./notifications.js";
 
 export {
   accountRoutes,
-  attachmentRoutes,
   userRoutes,
   torrentRoutes,
   announcementRoutes,

@@ -117,13 +117,6 @@ module.exports = {
     SQ_AVATAR_MAX_SIZE_KB: 512,
     SQ_ALLOW_GIF_AVATARS: true,
 
-    // Whether users can upload file attachments (images, .txt, .md) linked
-    // from posts and descriptions. Links only, files are served separately.
-    SQ_ATTACHMENTS_ENABLED: true,
-
-    // Maximum attachment file size in KB.
-    SQ_ATTACHMENT_MAX_SIZE_KB: 2048,
-
     // The URL of your tracker site.
     // For local development, this should be `http://127.0.0.1:3000`.
     SQ_BASE_URL: "https://sqtracker.dev",
