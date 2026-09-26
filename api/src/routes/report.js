@@ -3,8 +3,10 @@ import ratelimit from "express-rate-limit";
 import {
   deleteReport,
   fetchReport,
+  getQueueCounts,
   getReports,
   getSolvedReports,
+  resolveManyReports,
   setReportResolved,
   updateReport,
 } from "../controllers/moderation.js";
@@ -31,6 +33,7 @@ const limiter = ratelimit({
 export default () => {
   router.get("/page/:page", limiter, getReports);
   router.get("/solved/page/:page", limiter, getSolvedReports);
+  router.post("/resolve-many", limiter, resolveManyReports);
   router.post("/resolve/:reportId", limiter, setReportResolved);
   router.put("/:reportId", limiter, updateReport);
   router.delete("/:reportId", limiter, deleteReport);

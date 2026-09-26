@@ -43,6 +43,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useTrackerConfig } from "@/hooks/use-tracker-config";
 import { useUnreadMessages } from "@/hooks/use-unread-messages";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
+import { useModerationQueue } from "@/hooks/use-moderation-queue";
 import { useApiData } from "@/hooks/use-api-data";
 import { canModerate } from "@/lib/api";
 import { UserAvatar } from "@/components/user-avatar";
@@ -103,6 +104,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { config } = useTrackerConfig();
   const unreadMessages = useUnreadMessages(Boolean(session));
   const unreadNotifications = useUnreadNotifications(Boolean(session));
+  const moderationQueue = useModerationQueue(
+    Boolean(session) && canModerate(session.role),
+  );
   const ownProfile = useApiData<{ avatarUpdated?: number }>(
     session ? "/account/profile" : null,
   );
@@ -165,7 +169,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
-  const accountItems: Array<{ label: string; href: string; icon: LucideIcon }> =
+  const accountItems: Array<{
+    label: string;
+    href: string;
+    icon: LucideIcon;
+    badge?: number;
+  }> =
     session
       ? [
           ...(canModerate(session.role)
@@ -174,6 +183,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   label: t("moderation"),
                   href: "/moderation",
                   icon: ShieldCheck,
+                  badge: moderationQueue,
                 },
               ]
             : []),
@@ -264,14 +274,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </PluginBoundary>
               );
             })}
-            {accountItems.map(({ label, href, icon: Icon }) => (
+            {accountItems.map(({ label, href, icon: Icon, badge }) => (
               <Link
                 className={`nav-link ${isActive(href) ? "active" : ""}`}
                 href={href}
                 key={label}
                 onClick={() => setMenuOpen(false)}
               >
-                <span>{label}</span>
+                <span className="nav-label">
+                  {label}
+                  {badge ? (
+                    <span
+                      className="nav-badge"
+                      aria-label={`${badge} items awaiting moderation`}
+                    >
+                      {badge > 99 ? "99+" : badge}
+                    </span>
+                  ) : null}
+                </span>
                 <Icon aria-hidden="true" />
               </Link>
             ))}

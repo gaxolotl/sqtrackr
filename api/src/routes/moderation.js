@@ -6,9 +6,10 @@ import {
   listMyTorrentSubmissions,
   listTorrentSubmissions,
   notifyTorrentSubmissionDecision,
+  rejectManySubmissions,
   rejectTorrentSubmission,
 } from "../controllers/uploadModeration.js";
-import { listMembers } from "../controllers/moderation.js";
+import { getQueueCounts, listMembers } from "../controllers/moderation.js";
 
 const router = express.Router();
 const limiter = ratelimit({
@@ -43,5 +44,11 @@ export default () => {
     limiter,
     notifyTorrentSubmissionDecision,
   );
+  router.post(
+    "/torrent-submissions/reject-many",
+    limiter,
+    rejectManySubmissions,
+  );
+  router.get("/queue-counts", limiter, getQueueCounts);
   return router;
 };

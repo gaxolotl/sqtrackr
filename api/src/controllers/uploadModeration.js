@@ -461,6 +461,85 @@ export const rejectTorrentSubmission = async (req, res, next) => {
   }
 };
 
+export const rejectManySubmissions = async (req, res, next) => {
+  if (!requireModerator(req, res)) return;
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+  const validIds = ids.filter((id) => mongoose.isValidObjectId(id));
+  if (!validIds.length) {
+    res.status(400).send("No valid submission ids");
+    return;
+  }
+  if (validIds.length > 100) {
+    res.status(400).send("Too many submissions at once (maximum 100)");
+    return;
+  }
+  const reason = validateContentText(
+    req.body.reason,
+    "Rejection reason",
+    getContentLimits().comment,
+    res,
+    { trim: false },
+  );
+  if (reason === null) return;
+
+  try {
+    const results = [];
+    for (const id of validIds) {
+      const submission = await TorrentSubmission.findById(id);
+      if (!submission) {
+        results.push({ id, ok: false, error: "Submission does not exist" });
+        continue;
+      }
+      if (submission.requiresReview === false) {
+        results.push({ id, ok: false, error: "Does not require review" });
+        continue;
+      }
+      if (submission.status === "approved") {
+        results.push({ id, ok: false, error: "Already approved" });
+        continue;
+      }
+      if (submission.status === "approving") {
+        const leaseExpired =
+          !submission.approvalStartedAt ||
+          submission.approvalStartedAt <= Date.now() - approvalLeaseMs;
+        if (!leaseExpired) {
+          results.push({ id, ok: false, error: "Being reviewed" });
+          continue;
+        }
+      }
+      const updated = await TorrentSubmission.findOneAndUpdate(
+        { _id: id, status: { $in: ["pending", "approving"] } },
+        {
+          $set: {
+            status: "rejected",
+            rejectionReason: reason,
+            reviewedAt: Date.now(),
+            reviewedBy: req.userId,
+          },
+          $unset: { binary: 1, approvalToken: 1, approvalStartedAt: 1 },
+        },
+        { new: true },
+      );
+      if (!updated) {
+        results.push({ id, ok: false, error: "Already reviewed" });
+        continue;
+      }
+      await notifyDecision(updated);
+      results.push({ id, ok: true });
+    }
+    const rejected = results.filter((result) => result.ok).length;
+    await logAudit(
+      req.userId,
+      "submission.rejected-many",
+      `${rejected} submissions`,
+      reason,
+    );
+    res.status(200).json({ results, rejected });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const notifyTorrentSubmissionDecision = async (req, res, next) => {
   if (!requireModerator(req, res)) return;
   if (!validSubmissionId(req.params.submissionId, res)) return;

@@ -5,8 +5,9 @@ import { CheckCircle2, Clock3, Search, XCircle } from "lucide-react";
 import { KeyboardEvent, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-context";
 import { Pager } from "@/components/pager";
-import { ApiState, PageHeader, SignInRequired } from "@/components/ui";
+import { ActionMessage, ApiState, PageHeader, SignInRequired } from "@/components/ui";
 import { useApiData } from "@/hooks/use-api-data";
+import { apiFetch } from "@/lib/api";
 import { canModerate } from "@/lib/api";
 import { formatBytes, formatDateTime } from "@/lib/format";
 import type { TorrentSubmissionPage } from "@/lib/types";
@@ -42,10 +43,14 @@ export function UploadModerationPage({ embedded }: { embedded?: boolean }) {
   const submissions = useApiData<TorrentSubmissionPage>(
     allowed ? `/moderation/torrent-submissions?${query}` : null,
   );
+  const [selected, setSelected] = useState<string[]>([]);
+  const [bulkMessage, setBulkMessage] = useState("");
+  const [bulkError, setBulkError] = useState("");
 
   function selectView(next: View) {
     setView(next);
     setPage(0);
+    setSelected([]);
   }
 
   function handleTabKey(event: KeyboardEvent<HTMLButtonElement>, tab: View) {
@@ -69,6 +74,40 @@ export function UploadModerationPage({ embedded }: { embedded?: boolean }) {
         <SignInRequired />
       </main>
     );
+  }
+
+  function toggleSelected(id: string) {
+    setSelected((current) =>
+      current.includes(id)
+        ? current.filter((candidate) => candidate !== id)
+        : [...current, id],
+    );
+  }
+
+  async function rejectSelected() {
+    if (!selected.length) return;
+    const reason = window.prompt("Rejection reason for all selected uploads:");
+    if (reason === null || !reason.trim()) return;
+    setBulkMessage("");
+    setBulkError("");
+    try {
+      const result = await apiFetch<{ rejected?: number }>(
+        "/moderation/torrent-submissions/reject-many",
+        {
+          method: "POST",
+          body: JSON.stringify({ ids: selected, reason: reason.trim() }),
+        },
+      );
+      setSelected([]);
+      setBulkMessage(`${result.rejected ?? 0} submissions rejected.`);
+      submissions.reload();
+    } catch (requestError) {
+      setBulkError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not reject submissions.",
+      );
+    }
   }
 
   const content = (
@@ -118,6 +157,19 @@ export function UploadModerationPage({ embedded }: { embedded?: boolean }) {
         role="tabpanel"
         aria-labelledby={`${view}-submissions-tab`}
       >
+        <ActionMessage message={bulkMessage} error={bulkError} />
+        {view === "pending" && submissions.data?.items.length ? (
+          <div className="moderation-bulk-actions">
+            <button
+              className="secondary-button compact-button"
+              type="button"
+              disabled={!selected.length}
+              onClick={rejectSelected}
+            >
+              Reject selected ({selected.length})
+            </button>
+          </div>
+        ) : null}
         <ApiState
           loading={submissions.loading}
           error={!allowed ? "Staff access is required." : submissions.error}
@@ -125,38 +177,47 @@ export function UploadModerationPage({ embedded }: { embedded?: boolean }) {
         >
           <div className="feed-list">
             {submissions.data?.items.map((submission) => (
-              <Link
-                className="feed-card"
-                href={`/moderation/uploads/${submission._id}`}
-                key={submission._id}
-              >
-                <div>
-                  <h2>
-                    <StatusIcon status={submission.status} />
-                    {submission.name}
-                  </h2>
-                  <p>
-                    Submitted {formatDateTime(submission.submittedAt)} by{" "}
-                    <span>
-                      {submission.uploadedBy?.username ??
-                        (submission.anonymous ? "Anonymous" : "Unknown")}
-                    </span>
-                    {submission.anonymous ? " · Anonymous upload" : ""}
-                    {` · ${submission.type || "Uncategorised"}`}
-                    {submission.source ? ` / ${submission.source}` : ""}
-                    {` · ${formatBytes(submission.size)}`}
-                  </p>
-                </div>
-                <span className="status-pill">
-                  {submission.status === "approving"
-                    ? "Approving"
-                    : submission.status === "approved"
-                      ? "Approved"
-                      : submission.status === "rejected"
-                        ? "Rejected"
-                        : "Pending"}
-                </span>
-              </Link>
+              <article className="feed-card" key={submission._id}>
+                {view === "pending" ? (
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(submission._id)}
+                    onChange={() => toggleSelected(submission._id)}
+                    aria-label={`Select submission ${submission.name}`}
+                  />
+                ) : null}
+                <Link
+                  className="feed-card-link"
+                  href={`/moderation/uploads/${submission._id}`}
+                >
+                  <div>
+                    <h2>
+                      <StatusIcon status={submission.status} />
+                      {submission.name}
+                    </h2>
+                    <p>
+                      Submitted {formatDateTime(submission.submittedAt)} by{" "}
+                      <span>
+                        {submission.uploadedBy?.username ??
+                          (submission.anonymous ? "Anonymous" : "Unknown")}
+                      </span>
+                      {submission.anonymous ? " · Anonymous upload" : ""}
+                      {` · ${submission.type || "Uncategorised"}`}
+                      {submission.source ? ` / ${submission.source}` : ""}
+                      {` · ${formatBytes(submission.size)}`}
+                    </p>
+                  </div>
+                  <span className="status-pill">
+                    {submission.status === "approving"
+                      ? "Approving"
+                      : submission.status === "approved"
+                        ? "Approved"
+                        : submission.status === "rejected"
+                          ? "Rejected"
+                          : "Pending"}
+                  </span>
+                </Link>
+              </article>
             ))}
           </div>
           {submissions.data ? (

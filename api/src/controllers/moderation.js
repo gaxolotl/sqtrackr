@@ -1,5 +1,7 @@
+import mongoose from "mongoose";
 import Report from "../schema/report.js";
 import Torrent from "../schema/torrent.js";
+import TorrentSubmission from "../schema/torrentSubmission.js";
 import User from "../schema/user.js";
 import Progress from "../schema/progress.js";
 import CheatLog from "../schema/cheatLog.js";
@@ -191,6 +193,62 @@ export const setReportResolved = async (req, res, next) => {
     await logAudit(req.userId, "report.resolved", String(req.params.reportId));
 
     res.sendStatus(200);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const resolveManyReports = async (req, res, next) => {
+  try {
+    if (!canModerate(req.userRole)) {
+      res.status(401).send("You do not have permission to resolve reports");
+      return;
+    }
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    const validIds = ids.filter((id) => mongoose.isValidObjectId(id));
+    if (!validIds.length) {
+      res.status(400).send("No valid report ids");
+      return;
+    }
+    if (validIds.length > 100) {
+      res.status(400).send("Too many reports at once (maximum 100)");
+      return;
+    }
+    const result = await Report.updateMany(
+      { _id: { $in: validIds }, solved: false },
+      {
+        $set: {
+          solved: true,
+          solvedAt: Date.now(),
+          updated: Date.now(),
+        },
+      },
+    );
+    await logAudit(
+      req.userId,
+      "report.resolved-many",
+      `${result.modifiedCount} reports`,
+    );
+    res.status(200).json({ resolved: result.modifiedCount });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const getQueueCounts = async (req, res, next) => {
+  try {
+    if (!canModerate(req.userRole)) {
+      res.status(401).send("You do not have permission to view queues");
+      return;
+    }
+    const [pendingSubmissions, openReports] = await Promise.all([
+      TorrentSubmission.countDocuments({
+        status: { $in: ["pending", "approving"] },
+        requiresReview: { $ne: false },
+      }),
+      Report.countDocuments({ solved: false }),
+    ]);
+    res.json({ pendingSubmissions, openReports });
   } catch (e) {
     next(e);
   }

@@ -1577,6 +1577,22 @@ h1 {
   height: 22px;
 }
 
+.feed-card-link {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-width: 0;
+}
+
+.moderation-bulk-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
 .status-pill,
 .tag {
   padding: 5px 9px;
