@@ -11,6 +11,7 @@
     "migration:torrent-add-fuzzy-name": "bun src/migrations/torrent-add-fuzzy-name.js"
   },
   "dependencies": {
+    "@sqtrackr/plugin-collages": "workspace:*",
     "@sqtrackr/plugin-reseed-radar": "workspace:*",
     "@sqtrackr/plugin-sdk": "workspace:*",
     "@sentry/node": "^7.36.0",

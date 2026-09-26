@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@sqtrackr/plugin-sdk", "@sqtrackr/plugin-reseed-radar"],
+  transpilePackages: ["@sqtrackr/plugin-sdk", "@sqtrackr/plugin-reseed-radar", "@sqtrackr/plugin-collages"],
   images: {
     remotePatterns: [
       {
