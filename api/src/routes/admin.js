@@ -4,6 +4,7 @@ import {
   getStats,
   refreshStats,
   listTorrentPeers,
+  listCheatLog,
 } from "../controllers/moderation.js";
 import { fetchSettings, updateSettings } from "../controllers/settings.js";
 
@@ -30,6 +31,7 @@ export default (tracker) => {
   router.get("/stats", limiter, getStats(tracker));
   router.post("/stats/refresh", limiter, refreshStats(tracker));
   router.get("/torrent/:infoHash/peers", limiter, listTorrentPeers(tracker));
+  router.get("/cheat-log/page/:page", limiter, listCheatLog);
   router.get("/settings", limiter, fetchSettings);
   router.put("/settings", limiter, updateSettings);
   return router;

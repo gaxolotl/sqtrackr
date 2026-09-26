@@ -2,6 +2,7 @@ import Report from "../schema/report.js";
 import Torrent from "../schema/torrent.js";
 import User from "../schema/user.js";
 import Progress from "../schema/progress.js";
+import CheatLog from "../schema/cheatLog.js";
 import Invite from "../schema/invite.js";
 import Request from "../schema/request.js";
 import Comment from "../schema/comment.js";
@@ -488,6 +489,45 @@ export const listTorrentPeers = (tracker) => async (req, res, next) => {
         username: usernameByPeerId.get(peer.peerId) ?? null,
       })),
     });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const listCheatLog = async (req, res, next) => {
+  try {
+    if (!canModerate(req.userRole)) {
+      res.status(401).send("You do not have permission to view the cheat log");
+      return;
+    }
+
+    const page = Math.max(parseInt(req.params.page, 10) || 0, 0);
+    const perPage = 25;
+    const entries = await CheatLog.find({})
+      .sort({ created: -1 })
+      .skip(page * perPage)
+      .limit(perPage)
+      .lean();
+
+    const userIds = [
+      ...new Set(
+        entries.map((entry) => entry.userId && String(entry.userId)).filter(Boolean),
+      ),
+    ];
+    const usernames = new Map();
+    if (userIds.length) {
+      const users = await User.find({ _id: { $in: userIds } })
+        .select("username")
+        .lean();
+      users.forEach((user) => usernames.set(String(user._id), user.username));
+    }
+
+    res.json(
+      entries.map((entry) => ({
+        ...entry,
+        username: usernames.get(String(entry.userId)) ?? null,
+      })),
+    );
   } catch (e) {
     next(e);
   }

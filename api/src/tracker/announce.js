@@ -3,6 +3,7 @@ import bencode from "bencode";
 import User from "../schema/user.js";
 import Torrent from "../schema/torrent.js";
 import Progress from "../schema/progress.js";
+import CheatLog from "../schema/cheatLog.js";
 import { envFlag } from "../utils/env.js";
 import { getUserRatio } from "../utils/ratio.js";
 import { getUserHitNRuns } from "../utils/hitnrun.js";
@@ -105,6 +106,36 @@ const handleAnnounce = async (req, res) => {
     downloaded >= alreadyDownloadedSession
       ? downloaded - alreadyDownloadedSession
       : 0;
+
+  // Anti-cheat: flag physically impossible upload speeds. The tracker asks
+  // clients to announce every 30s, so anything far above 10 Gbps sustained
+  // between announces is spoofed. Log only, never deny (avoids false bans).
+  const MAX_REASONABLE_UPLOAD_BPS = 1.25e9;
+  const prevUpdatedAt = prevProgressRecord?.updatedAt
+    ? new Date(prevProgressRecord.updatedAt).getTime()
+    : null;
+  if (prevUpdatedAt && uploadDeltaSession > 0) {
+    const elapsedSeconds = (Date.now() - prevUpdatedAt) / 1000;
+    if (elapsedSeconds >= 10) {
+      const bytesPerSecond = uploadDeltaSession / elapsedSeconds;
+      if (bytesPerSecond > MAX_REASONABLE_UPLOAD_BPS) {
+        const gb = (uploadDeltaSession / BYTES_GB).toFixed(2);
+        const details =
+          `+${gb} GB in ${elapsedSeconds.toFixed(0)}s ` +
+          `(${(bytesPerSecond / 1e6).toFixed(0)} MB/s)`;
+        CheatLog.create({
+          userId: user._id,
+          infoHash,
+          peerId,
+          reason: "impossible-upload-speed",
+          details,
+          created: Date.now(),
+        }).catch((err) =>
+          console.error("[sq] failed to write cheat log:", err.message),
+        );
+      }
+    }
+  }
 
   const [sumUploaded] = await Progress.aggregate([
     {
