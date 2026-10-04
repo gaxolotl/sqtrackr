@@ -213,7 +213,7 @@ export const uploadTorrent = async (req, res, next) => {
         }
       }
 
-      const user = await User.findOne({ _id: req.userId }).lean();
+      const user = await User.findOne({ _id: req.userId }, { uid: 1 }).lean();
 
       let tmdb;
       if (req.body.tmdb !== undefined) {
@@ -252,7 +252,10 @@ export const uploadTorrent = async (req, res, next) => {
         .update(bencode.encode(parsed.info))
         .digest("hex");
 
-      const existingTorrent = await Torrent.findOne({ infoHash }).lean();
+      const existingTorrent = await Torrent.findOne(
+        { infoHash },
+        { _id: 1 },
+      ).lean();
 
       if (existingTorrent) {
         res.status(409).send("Torrent with this info hash already exists");
@@ -305,9 +308,12 @@ export const uploadTorrent = async (req, res, next) => {
           return;
         }
 
-        groupWithTorrent = await Torrent.findOne({
-          infoHash: groupWith,
-        }).lean();
+        groupWithTorrent = await Torrent.findOne(
+          {
+            infoHash: groupWith,
+          },
+          { _id: 1, infoHash: 1, group: 1 },
+        ).lean();
 
         if (!groupWithTorrent) {
           res.status(400).send("Cannot group with torrent that does not exist");
@@ -322,7 +328,11 @@ export const uploadTorrent = async (req, res, next) => {
         source: req.body.source,
         infoHash,
         binary: req.body.torrent,
-        poster: req.body.poster,
+        poster:
+          typeof req.body.poster === "string" &&
+          /^https?:\/\/.{1,500}$/i.test(req.body.poster.trim())
+            ? req.body.poster.trim().slice(0, 500)
+            : undefined,
         uploadedBy: req.userId,
         downloads: 0,
         anonymous:
@@ -435,9 +445,12 @@ export const editTorrent = async (req, res, next) => {
         return;
       }
 
-      const torrent = await Torrent.findOne({
-        infoHash,
-      }).lean();
+      const torrent = await Torrent.findOne(
+        {
+          infoHash,
+        },
+        { _id: 1, uploadedBy: 1 },
+      ).lean();
 
       if (!torrent) {
         res.status(404).send("Torrent does not exist");
@@ -546,7 +559,12 @@ export const downloadTorrent = async (req, res, next) => {
   try {
     const { infoHash, userId } = req.params;
 
-    const user = await User.findOne({ uid: userId }).lean();
+    if (!isValidInfoHash(infoHash)) {
+      res.status(404).send("Torrent does not exist");
+      return;
+    }
+
+    const user = await User.findOne({ uid: userId }, { uid: 1 }).lean();
 
     if (!user) {
       res.status(401).send(`User does not exist`);
@@ -554,8 +572,18 @@ export const downloadTorrent = async (req, res, next) => {
     }
 
     const torrent = await Torrent.findOne({ infoHash }).lean();
+    if (!torrent || !torrent.binary) {
+      res.status(404).send("Torrent does not exist");
+      return;
+    }
     const { binary } = torrent;
-    const parsed = bencode.decode(Buffer.from(binary, "base64"));
+    let parsed;
+    try {
+      parsed = bencode.decode(Buffer.from(binary, "base64"));
+    } catch {
+      res.status(500).send("Could not read the .torrent file");
+      return;
+    }
 
     parsed.announce = getAnnounceUrl(user.uid);
     delete parsed["announce-list"];
@@ -704,7 +732,8 @@ export const fetchTorrent = (tracker) => async (req, res, next) => {
       return;
     }
 
-    if (torrent.anonymous) delete torrent.uploadedBy;
+    if (torrent.anonymous && req.userRole !== "admin")
+      delete torrent.uploadedBy;
 
     const [embellishedTorrent] = await embellishTorrentsWithTrackerScrape(
       tracker,
@@ -741,9 +770,12 @@ export const fetchTorrent = (tracker) => async (req, res, next) => {
 
 export const deleteTorrent = async (req, res, next) => {
   try {
-    const torrent = await Torrent.findOne({
-      infoHash: req.params.infoHash,
-    }).lean();
+    const torrent = await Torrent.findOne(
+      {
+        infoHash: req.params.infoHash,
+      },
+      { _id: 1, infoHash: 1, uploadedBy: 1, group: 1 },
+    ).lean();
 
     if (!torrent) {
       res.status(404).send("Torrent could not be found");
@@ -861,43 +893,35 @@ export const getTorrentsPage = async ({
   tag,
   uploadedBy,
   userId,
+  userRole,
   sort,
   tracker,
 }) => {
   const { hasTextQuery, textStages, mediaStages } =
     getTorrentSearchStages(query);
 
+  const safeCategory = typeof category === "string" ? category : undefined;
+  const safeSource = typeof source === "string" ? source : undefined;
+  const safeTag = typeof tag === "string" ? tag : undefined;
+  const safeSkip = Math.max(0, Number(skip) || 0);
+  const safeLimit = Math.min(Math.max(1, Number(limit) || 25), 100);
+
+  const ALLOWED_SORT_FIELDS = new Set([
+    "created",
+    "size",
+    "downloads",
+    "name",
+  ]);
   const [sortField, sortDirString] = sort?.split(":") ?? [];
   const sortDir = sortDirString === "asc" ? 1 : -1;
 
   const combinedSort = {};
-  if (sortField) combinedSort[sortField] = sortDir;
+  if (sortField && ALLOWED_SORT_FIELDS.has(sortField))
+    combinedSort[sortField] = sortDir;
   if (hasTextQuery) combinedSort.confidenceScore = { $meta: "textScore" };
   if (!combinedSort.created) combinedSort.created = -1;
 
-  const torrents = await Torrent.aggregate([
-    ...textStages,
-    ...mediaStages,
-    {
-      $project: {
-        infoHash: 1,
-        name: 1,
-        description: 1,
-        type: 1,
-        source: 1,
-        downloads: 1,
-        uploadedBy: 1,
-        created: 1,
-        freeleech: 1,
-        tags: 1,
-        "tmdb.title": 1,
-        "tmdb.mediaType": 1,
-        "tmdb.season": 1,
-        "tmdb.episodes": 1,
-        "tmdb.episodeTitle": 1,
-        confidenceScore: 1,
-      },
-    },
+  const filterStages = [
     ...(Array.isArray(ids)
       ? [
           {
@@ -905,29 +929,29 @@ export const getTorrentsPage = async ({
           },
         ]
       : []),
-    ...(category
+    ...(safeCategory
       ? [
           {
             $match: {
-              type: category,
+              type: safeCategory,
             },
           },
         ]
       : []),
-    ...(source
+    ...(safeSource
       ? [
           {
             $match: {
-              source,
+              source: safeSource,
             },
           },
         ]
       : []),
-    ...(tag
+    ...(safeTag
       ? [
           {
             $match: {
-              $expr: { $in: [tag, "$tags"] },
+              $expr: { $in: [safeTag, "$tags"] },
             },
           },
         ]
@@ -941,6 +965,51 @@ export const getTorrentsPage = async ({
           },
         ]
       : []),
+  ];
+
+  const countPipeline = [
+    ...textStages,
+    ...mediaStages,
+    ...filterStages,
+    {
+      $count: "total",
+    },
+  ];
+
+  const dataPipeline = [
+    ...textStages,
+    ...mediaStages,
+    ...filterStages,
+    {
+      $project: {
+        infoHash: 1,
+        name: 1,
+        description: 1,
+        type: 1,
+        source: 1,
+        downloads: 1,
+        uploadedBy: 1,
+        anonymous: 1,
+        created: 1,
+        freeleech: 1,
+        tags: 1,
+        "tmdb.title": 1,
+        "tmdb.mediaType": 1,
+        "tmdb.season": 1,
+        "tmdb.episodes": 1,
+        "tmdb.episodeTitle": 1,
+        confidenceScore: 1,
+      },
+    },
+    {
+      $sort: combinedSort,
+    },
+    {
+      $skip: safeSkip,
+    },
+    {
+      $limit: safeLimit,
+    },
     {
       $lookup: {
         from: "comments",
@@ -989,82 +1058,39 @@ export const getTorrentsPage = async ({
       },
     },
     { $unwind: { path: "$fetchedBy", preserveNullAndEmptyArrays: true } },
-    {
-      $sort: combinedSort,
-    },
-    {
-      $skip: skip,
-    },
-    {
-      $limit: limit,
-    },
+  ];
+
+  const [torrents, [count]] = await Promise.all([
+    Torrent.aggregate(dataPipeline),
+    Torrent.aggregate(countPipeline),
   ]);
 
-  const [count] = await Torrent.aggregate([
-    ...textStages,
-    ...mediaStages,
-    ...(Array.isArray(ids)
-      ? [
-          {
-            $match: { $expr: { $in: ["$_id", ids] } },
-          },
-        ]
-      : []),
-    ...(category
-      ? [
-          {
-            $match: {
-              type: category,
-            },
-          },
-        ]
-      : []),
-    ...(source
-      ? [
-          {
-            $match: {
-              source,
-            },
-          },
-        ]
-      : []),
-    ...(tag
-      ? [
-          {
-            $match: {
-              $expr: { $in: [tag, "$tags"] },
-            },
-          },
-        ]
-      : []),
-    ...(uploadedBy
-      ? [
-          {
-            $match: {
-              uploadedBy,
-            },
-          },
-        ]
-      : []),
-    {
-      $count: "total",
-    },
-  ]);
+  const stripped =
+    userRole === "admin"
+      ? torrents
+      : torrents.map((t) => {
+          if (t.anonymous) {
+            const { uploadedBy: _removed, ...rest } = t;
+            return rest;
+          }
+          return t;
+        });
 
   return {
-    torrents: await embellishTorrentsWithTrackerScrape(tracker, torrents),
-    total: count?.total ?? torrents.length,
+    torrents: await embellishTorrentsWithTrackerScrape(tracker, stripped),
+    total: count?.total ?? stripped.length,
   };
 };
 
 export const listLatest = (tracker) => async (req, res, next) => {
   let { count } = req.query;
   count = parseInt(count) || 25;
-  count = Math.min(count, 100);
+  count = Math.min(Math.max(count, 1), 100);
   try {
     const { torrents } = await getTorrentsPage({
       limit: count,
       userId: req.userId,
+      userRole: req.userRole,
       tracker,
     });
     res.json(torrents);
@@ -1075,7 +1101,10 @@ export const listLatest = (tracker) => async (req, res, next) => {
 
 export const listAll = async (req, res, next) => {
   try {
-    const torrents = await Torrent.find({}, { infoHash: 1 }).lean();
+    const torrents = await Torrent.find({}, { infoHash: 1 })
+      .sort({ created: -1 })
+      .limit(5000)
+      .lean();
     res.json(torrents);
   } catch (e) {
     next(e);
@@ -1085,14 +1114,16 @@ export const listAll = async (req, res, next) => {
 export const searchTorrents = (tracker) => async (req, res, next) => {
   const { query, category, source, tag, page, sort } = req.query;
   try {
+    const safePage = Math.max(0, parseInt(page, 10) || 0);
     const torrents = await getTorrentsPage({
-      skip: page ? parseInt(page) * 25 : 0,
+      skip: safePage * 25,
       limit: 25,
       query: typeof query === "string" ? query.trim().slice(0, 200) : undefined,
       category,
       source,
       tag: tag ? decodeURIComponent(tag) : undefined,
       userId: req.userId,
+      userRole: req.userRole,
       sort: sort ? decodeURIComponent(sort) : undefined,
       tracker,
     });
@@ -1154,7 +1185,10 @@ export const addComment = async (req, res, next) => {
     if (commentText === null) return;
       const { infoHash } = req.params;
 
-      const torrent = await Torrent.findOne({ infoHash }).lean();
+      const torrent = await Torrent.findOne(
+        { infoHash },
+        { _id: 1 },
+      ).lean();
 
       if (!torrent) {
         res.status(404).send("Torrent does not exist");
@@ -1179,7 +1213,7 @@ export const addComment = async (req, res, next) => {
 export const addVote = async (req, res, next) => {
   const { infoHash, vote } = req.params;
   try {
-    const torrent = await Torrent.findOne({ infoHash }).lean();
+    const torrent = await Torrent.findOne({ infoHash }, { _id: 1 }).lean();
 
     if (!torrent) {
       res.status(404).send("Torrent could not be found");
@@ -1213,7 +1247,7 @@ export const addVote = async (req, res, next) => {
 export const removeVote = async (req, res, next) => {
   const { infoHash, vote } = req.params;
   try {
-    const torrent = await Torrent.findOne({ infoHash }).lean();
+    const torrent = await Torrent.findOne({ infoHash }, { _id: 1 }).lean();
 
     if (!torrent) {
       res.status(404).send("Torrent could not be found");
@@ -1248,7 +1282,10 @@ export const toggleFreeleech = async (req, res, next) => {
       return;
     }
 
-    const torrent = await Torrent.findOne({ infoHash }).lean();
+    const torrent = await Torrent.findOne(
+      { infoHash },
+      { _id: 1, freeleech: 1 },
+    ).lean();
 
     if (!torrent) {
       res.status(404).send("Torrent could not be found");
@@ -1268,18 +1305,25 @@ export const toggleFreeleech = async (req, res, next) => {
 export const toggleBookmark = async (req, res, next) => {
   const { infoHash } = req.params;
   try {
-    const torrent = await Torrent.findOne({ infoHash }).lean();
+    const torrent = await Torrent.findOne(
+      { infoHash },
+      { _id: 1 },
+    ).lean();
 
     if (!torrent) {
       res.status(404).send("Torrent could not be found");
       return;
     }
 
-    const user = await User.findOne({ _id: req.userId }).lean();
+    const user = await User.findOne(
+      { _id: req.userId },
+      { bookmarks: 1 },
+    ).lean();
 
-    const isBookmarked = (await user.bookmarks?.length)
-      ? user.bookmarks.map((b) => b.toString()).includes(torrent._id.toString())
-      : false;
+    const isBookmarked = (user?.bookmarks?.length
+      ? user.bookmarks.map((b) => b.toString())
+      : []
+    ).includes(torrent._id.toString());
 
     await User.findOneAndUpdate(
       { _id: req.userId },
@@ -1293,20 +1337,11 @@ export const toggleBookmark = async (req, res, next) => {
 
 export const listTags = async (req, res, next) => {
   try {
-    const torrents = await Torrent.find(
-      { tags: { $exists: true, $not: { $size: 0 } } },
-      { tags: 1 },
-    ).lean();
+    const tags = await Torrent.distinct("tags", {
+      tags: { $exists: true, $ne: [] },
+    });
 
-    const uniqueTags = new Set();
-
-    for (const { tags } of torrents) {
-      for (const tag of tags) {
-        if (tag !== "") uniqueTags.add(tag);
-      }
-    }
-
-    res.json(Array.from(uniqueTags));
+    res.json(tags.filter((t) => t !== ""));
   } catch (e) {
     next(e);
   }

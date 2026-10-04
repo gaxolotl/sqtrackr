@@ -14,6 +14,24 @@ import { envFlag } from "../utils/env.js";
 import { isAdmin, VALID_ROLES } from "../utils/roles.js";
 import { getContentLimits } from "../utils/contentLimits.js";
 
+const validatePasswordStrength = (password, res) => {
+  if (
+    typeof password !== "string" ||
+    password.length < 8 ||
+    password.length > 128
+  ) {
+    res.status(400).send("Password must be between 8 and 128 characters");
+    return null;
+  }
+  return password;
+};
+
+const normalizeEmail = (email) =>
+  typeof email === "string" ? email.trim().toLowerCase() : email;
+
+const isValidEmail = (email) =>
+  typeof email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
 export const sendVerificationEmail = async (mail, address, token) => {
   await mail.sendMail({
     from: `"${process.env.SQ_SITE_NAME}" <${process.env.SQ_MAIL_FROM_ADDRESS}>`,
@@ -51,7 +69,19 @@ export const register = (mail) => async (req, res, next) => {
 
     if (req.body.invite) {
       try {
-        const decoded = jwt.verify(req.body.invite, process.env.SQ_JWT_SECRET);
+        let decoded;
+        try {
+          decoded = jwt.verify(req.body.invite, process.env.SQ_JWT_SECRET);
+        } catch (err) {
+          if (
+            err?.name === "JsonWebTokenError" ||
+            err?.name === "TokenExpiredError"
+          ) {
+            res.status(403).send("Invitation is invalid or expired");
+            return;
+          }
+          throw err;
+        }
         const { id } = decoded;
 
         invite = await Invite.findOne({ _id: id }).lean();
@@ -71,7 +101,10 @@ export const register = (mail) => async (req, res, next) => {
           return;
         }
 
-        if (email !== req.body.email) {
+        if (
+          normalizeEmail(email) !==
+          normalizeEmail(req.body.email)
+        ) {
           res
             .status(403)
             .send("Email address does not match invited email address");
@@ -87,10 +120,36 @@ export const register = (mail) => async (req, res, next) => {
         }
       } catch (err) {
         console.error("[sq] error verifying invitation:", err.message);
+        if (
+          err?.name === "JsonWebTokenError" ||
+          err?.name === "TokenExpiredError"
+        ) {
+          res.status(403).send("Invitation is invalid or expired");
+          return;
+        }
         res.status(500).send("Error verifying invitation");
         return;
       }
     }
+
+    if (typeof req.body.username !== "string" || typeof req.body.email !== "string") {
+      res.status(400).send("Request must include email, username and password");
+      return;
+    }
+    const normalizedEmail = normalizeEmail(req.body.email);
+    if (!isValidEmail(normalizedEmail)) {
+      res.status(400).send("Email address is invalid");
+      return;
+    }
+    if (
+      req.body.username.trim().length < 3 ||
+      req.body.username.trim().length > 32
+    ) {
+      res.status(400).send("Username must be between 3 and 32 characters");
+      return;
+    }
+    const passwordChecked = validatePasswordStrength(req.body.password, res);
+    if (!passwordChecked) return;
 
     const normalizedUsername = req.body.username.toLowerCase();
     const created = Date.now();
@@ -100,7 +159,7 @@ export const register = (mail) => async (req, res, next) => {
 
     try {
       const user = await User.findOne({
-        $or: [{ email: req.body.email }, { username: normalizedUsername }],
+        $or: [{ email: normalizedEmail }, { username: normalizedUsername }],
       });
 
       if (!user) {
@@ -111,7 +170,7 @@ export const register = (mail) => async (req, res, next) => {
           return;
         }
 
-        const hash = await bcrypt.hash(req.body.password, 10);
+        const hash = await bcrypt.hash(passwordChecked, 10);
         if (invite) {
           const claimedInvite = await Invite.findOneAndUpdate(
             { _id: invite._id, claimed: false },
@@ -155,7 +214,7 @@ export const register = (mail) => async (req, res, next) => {
 
         const newUser = new User({
           username: normalizedUsername,
-          email: req.body.email,
+          email: normalizedEmail,
           password: hash,
           torrents: {},
           created,
@@ -182,14 +241,14 @@ export const register = (mail) => async (req, res, next) => {
           const emailVerificationValidUntil = created + 48 * 60 * 60 * 1000;
           const emailVerificationToken = jwt.sign(
             {
-              user: req.body.email,
+              user: normalizedEmail,
               validUntil: emailVerificationValidUntil,
             },
             process.env.SQ_JWT_SECRET,
           );
           await sendVerificationEmail(
             mail,
-            req.body.email,
+            normalizedEmail,
             emailVerificationToken,
           );
         }
@@ -202,8 +261,10 @@ export const register = (mail) => async (req, res, next) => {
                 username: newUser.username,
                 created,
                 role,
+                pwdVersion: newUser.pwdVersion,
               },
               process.env.SQ_JWT_SECRET,
+              { expiresIn: "7d" },
             ),
             id: createdUser._id,
             uid: createdUser.uid,
@@ -267,14 +328,18 @@ export const login = async (req, res, next) => {
           return;
         }
 
-        if (user.totp.enabled && !req.body.totp) {
-          res.status(401).send("One-time code required");
+        const matches = await bcrypt.compare(req.body.password, user.password);
+
+        if (!matches) {
+          res.status(401).send("Incorrect login details");
           return;
         }
 
-        const matches = await bcrypt.compare(req.body.password, user.password);
-
-        if (user.totp.enabled) {
+        if (user.totp?.enabled) {
+          if (!req.body.totp) {
+            res.status(401).send("One-time code required");
+            return;
+          }
           const validToken = speakeasy.totp.verify({
             secret: user.totp.secret,
             encoding: "base32",
@@ -283,8 +348,8 @@ export const login = async (req, res, next) => {
           });
 
           if (!validToken) {
-            if (!user.totp.backup.includes(req.body.totp)) {
-              res.status(401).send("Invalid one-time code");
+            if (!(user.totp.backup ?? []).includes(req.body.totp)) {
+              res.status(401).send("Incorrect login details");
               return;
             } else {
               await User.findOneAndUpdate(
@@ -303,8 +368,10 @@ export const login = async (req, res, next) => {
                 username: user.username,
                 created: user.created,
                 role: user.role,
+                pwdVersion: user.pwdVersion,
               },
               process.env.SQ_JWT_SECRET,
+              { expiresIn: "7d" },
             ),
             id: user._id,
             uid: user.uid,
@@ -314,7 +381,7 @@ export const login = async (req, res, next) => {
           res.status(401).send("Incorrect login details");
         }
       } else {
-        res.status(404).send("Incorrect login details");
+        res.status(401).send("Incorrect login details");
       }
     } catch (e) {
       next(e);
@@ -334,6 +401,12 @@ export const generateInvite = (mail) => async (req, res, next) => {
 
   if (!req.body.email || !req.body.role) {
     res.status(400).send("Request must include email, role");
+    return;
+  }
+
+  const normalizedInviteEmail = normalizeEmail(req.body.email);
+  if (!isValidEmail(normalizedInviteEmail)) {
+    res.status(400).send("Email address is invalid");
     return;
   }
 
@@ -368,7 +441,7 @@ export const generateInvite = (mail) => async (req, res, next) => {
       validUntil,
       claimed: false,
       reserved: true,
-      email: req.body.email,
+      email: normalizedInviteEmail,
       role: admin ? requestedRole : "user",
     });
 
@@ -383,7 +456,7 @@ export const generateInvite = (mail) => async (req, res, next) => {
     if (!envFlag("SQ_DISABLE_EMAIL")) {
       await mail.sendMail({
         from: `"${process.env.SQ_SITE_NAME}" <${process.env.SQ_MAIL_FROM_ADDRESS}>`,
-        to: req.body.email,
+        to: normalizedInviteEmail,
         subject: "Invite",
         text: `You have been invited to join ${process.env.SQ_SITE_NAME}. Please follow the link below to register.
         
@@ -416,7 +489,12 @@ export const fetchInvites = async (req, res, next) => {
 export const changePassword = (mail) => async (req, res, next) => {
   if (req.body.password && req.body.newPassword) {
     try {
-      const user = await User.findOne({ _id: req.userId }).lean();
+      const checked = validatePasswordStrength(req.body.newPassword, res);
+      if (!checked) return;
+      const user = await User.findOne(
+        { _id: req.userId },
+        { password: 1, email: 1 },
+      ).lean();
 
       if (!user) {
         res.status(404).send("User does not exist");
@@ -430,7 +508,7 @@ export const changePassword = (mail) => async (req, res, next) => {
         return;
       }
 
-      const hash = await bcrypt.hash(req.body.newPassword, 10);
+      const hash = await bcrypt.hash(checked, 10);
 
       await User.findOneAndUpdate(
         { _id: req.userId },
@@ -473,8 +551,9 @@ export const initiatePasswordReset = (mail) => async (req, res, next) => {
         res.status(400).send("Request must include email");
         return;
       }
+      const normalizedEmail = normalizeEmail(req.body.email);
 
-      const user = await User.findOne({ email: req.body.email }).lean();
+      const user = await User.findOne({ email: normalizedEmail }).lean();
 
       if (!user) {
         res.sendStatus(200);
@@ -483,7 +562,7 @@ export const initiatePasswordReset = (mail) => async (req, res, next) => {
 
       const token = jwt.sign(
         {
-          user: req.body.email,
+          user: normalizedEmail,
           validUntil: Date.now() + 24 * 60 * 60 * 1000,
           key: user.pwdVersion,
         },
@@ -526,20 +605,38 @@ export const finalisePasswordReset = async (req, res, next) => {
         return;
       }
 
-      const user = await User.findOne({ email }).lean();
+      const checked = validatePasswordStrength(newPassword, res);
+      if (!checked) return;
+      const normalizedEmail = normalizeEmail(email);
+
+      const user = await User.findOne({ email: normalizedEmail }).lean();
 
       if (!user) {
         res.status(404).send("User does not exist");
         return;
       }
 
-      const {
-        user: tokenEmail,
-        validUntil,
-        key,
-      } = jwt.verify(token, process.env.SQ_JWT_SECRET);
+      let tokenEmail;
+      let validUntil;
+      let key;
+      try {
+        ({
+          user: tokenEmail,
+          validUntil,
+          key,
+        } = jwt.verify(token, process.env.SQ_JWT_SECRET));
+      } catch (err) {
+        if (
+          err?.name === "JsonWebTokenError" ||
+          err?.name === "TokenExpiredError"
+        ) {
+          res.status(403).send("Token is invalid");
+          return;
+        }
+        throw err;
+      }
 
-      if (tokenEmail !== email) {
+      if (tokenEmail !== normalizedEmail) {
         res.status(403).send("Token is invalid");
         return;
       }
@@ -554,7 +651,7 @@ export const finalisePasswordReset = async (req, res, next) => {
         return;
       }
 
-      const newHash = await bcrypt.hash(newPassword, 10);
+      const newHash = await bcrypt.hash(checked, 10);
 
       await User.findOneAndUpdate(
         { _id: user._id },
@@ -626,6 +723,8 @@ export const fetchUser = (tracker) => async (req, res, next) => {
                       type: "torrent",
                     },
                   },
+                  { $sort: { created: -1 } },
+                  { $limit: 50 },
                   {
                     $lookup: {
                       from: "torrents",
@@ -654,6 +753,8 @@ export const fetchUser = (tracker) => async (req, res, next) => {
                       type: "announcement",
                     },
                   },
+                  { $sort: { created: -1 } },
+                  { $limit: 50 },
                   {
                     $lookup: {
                       from: "announcements",
@@ -682,6 +783,8 @@ export const fetchUser = (tracker) => async (req, res, next) => {
                       type: "request",
                     },
                   },
+                  { $sort: { created: -1 } },
+                  { $limit: 50 },
                   {
                     $lookup: {
                       from: "requests",
@@ -806,16 +909,18 @@ export const fetchUser = (tracker) => async (req, res, next) => {
       return;
     }
 
-    const { ratio } = await getUserRatio(user._id);
+    const [{ ratio }, hitnruns, { torrents }] = await Promise.all([
+      getUserRatio(user._id),
+      getUserHitNRuns(user._id),
+      getTorrentsPage({
+        uploadedBy: user._id,
+        userId: req.userId,
+        userRole: req.userRole,
+        tracker,
+      }),
+    ]);
     user.ratio = ratio;
-
-    user.hitnruns = await getUserHitNRuns(user._id);
-
-    const { torrents } = await getTorrentsPage({
-      uploadedBy: user._id,
-      userId: req.userId,
-      tracker,
-    });
+    user.hitnruns = hitnruns;
     user.torrents = torrents;
 
     res.json(user);
@@ -826,15 +931,20 @@ export const fetchUser = (tracker) => async (req, res, next) => {
 
 export const getUserStats = async (req, res, next) => {
   try {
-    const user = await User.findOne({ _id: req.userId }).lean();
+    const user = await User.findOne(
+      { _id: req.userId },
+      { bonusPoints: 1 },
+    ).lean();
 
     if (!user) {
       res.status(404).send("User does not exist");
       return;
     }
 
-    const ratioStats = await getUserRatio(user._id);
-    const hitnruns = await getUserHitNRuns(user._id);
+    const [ratioStats, hitnruns] = await Promise.all([
+      getUserRatio(user._id),
+      getUserHitNRuns(user._id),
+    ]);
 
     res.json({ ...ratioStats, bp: Number(user.bonusPoints ?? 0), hitnruns });
   } catch (e) {
@@ -844,7 +954,11 @@ export const getUserStats = async (req, res, next) => {
 
 export const getUserRole = async (req, res, next) => {
   try {
-    const user = await User.findOne({ _id: req.userId }).lean();
+    const user = await User.findOne({ _id: req.userId }, { role: 1 }).lean();
+    if (!user) {
+      res.status(404).send("User does not exist");
+      return;
+    }
     res.send(user.role);
   } catch (e) {
     next(e);
@@ -853,7 +967,14 @@ export const getUserRole = async (req, res, next) => {
 
 export const getUserVerifiedEmailStatus = async (req, res, next) => {
   try {
-    const user = await User.findOne({ _id: req.userId }).lean();
+    const user = await User.findOne(
+      { _id: req.userId },
+      { emailVerified: 1 },
+    ).lean();
+    if (!user) {
+      res.status(404).send("User does not exist");
+      return;
+    }
     res.send(!!user.emailVerified);
   } catch (e) {
     next(e);
@@ -863,10 +984,23 @@ export const getUserVerifiedEmailStatus = async (req, res, next) => {
 export const verifyUserEmail = async (req, res, next) => {
   if (req.body.token) {
     try {
-      const { user: email, validUntil } = jwt.verify(
-        req.body.token,
-        process.env.SQ_JWT_SECRET,
-      );
+      let email;
+      let validUntil;
+      try {
+        ({ user: email, validUntil } = jwt.verify(
+          req.body.token,
+          process.env.SQ_JWT_SECRET,
+        ));
+      } catch (err) {
+        if (
+          err?.name === "JsonWebTokenError" ||
+          err?.name === "TokenExpiredError"
+        ) {
+          res.status(403).send("Token is invalid");
+          return;
+        }
+        throw err;
+      }
 
       if (validUntil < Date.now()) {
         res.status(403).send("Token has expired");
@@ -951,7 +1085,10 @@ export const buyItems = async (req, res, next) => {
         return;
       }
 
-      const user = await User.findOne({ _id: req.userId }).lean();
+      const user = await User.findOne(
+        { _id: req.userId },
+        { bonusPoints: 1 },
+      ).lean();
       if (!user) {
         res.status(404).send("User does not exist");
         return;
@@ -1113,8 +1250,11 @@ export const setUserRole = async (req, res, next) => {
 
 export const generateTotpSecret = async (req, res, next) => {
   try {
-    const user = await User.findOne({ _id: req.userId }).lean();
-    if (user.totp.enabled) {
+    const user = await User.findOne(
+      { _id: req.userId },
+      { totp: 1, username: 1 },
+    ).lean();
+    if (user?.totp?.enabled) {
       res.status(409).send("TOTP already enabled");
       return;
     }
@@ -1145,14 +1285,17 @@ export const generateTotpSecret = async (req, res, next) => {
 export const enableTotp = async (req, res, next) => {
   if (req.body.token) {
     try {
-      const user = await User.findOne({ _id: req.userId }).lean();
-      if (user.totp.enabled) {
+      const user = await User.findOne(
+        { _id: req.userId },
+        { totp: 1 },
+      ).lean();
+      if (user?.totp?.enabled) {
         res.status(409).send("TOTP already enabled");
         return;
       }
 
       const validToken = speakeasy.totp.verify({
-        secret: user.totp.secret,
+        secret: user?.totp?.secret,
         encoding: "base32",
         token: req.body.token,
         window: 1,
@@ -1189,10 +1332,13 @@ export const enableTotp = async (req, res, next) => {
 export const disableTotp = async (req, res, next) => {
   if (req.body.token) {
     try {
-      const user = await User.findOne({ _id: req.userId }).lean();
+      const user = await User.findOne(
+        { _id: req.userId },
+        { totp: 1 },
+      ).lean();
 
       const validToken = speakeasy.totp.verify({
-        secret: user.totp.secret,
+        secret: user?.totp?.secret,
         encoding: "base32",
         token: req.body.token,
         window: 1,
@@ -1227,7 +1373,10 @@ export const disableTotp = async (req, res, next) => {
 export const deleteAccount = async (req, res, next) => {
   if (req.body.password) {
     try {
-      const user = await User.findOne({ _id: req.userId }).lean();
+      const user = await User.findOne(
+        { _id: req.userId },
+        { password: 1, username: 1 },
+      ).lean();
 
       if (!user) {
         res.status(404).send("User does not exist");
@@ -1259,10 +1408,18 @@ export const deleteAccount = async (req, res, next) => {
 
 export const getUserBookmarks = (tracker) => async (req, res, next) => {
   try {
-    const user = await User.findOne({ _id: req.userId }).lean();
+    const user = await User.findOne(
+      { _id: req.userId },
+      { bookmarks: 1 },
+    ).lean();
+    if (!user) {
+      res.status(404).send("User does not exist");
+      return;
+    }
     const bookmarks = await getTorrentsPage({
-      ids: user.bookmarks,
+      ids: user.bookmarks ?? [],
       userId: req.userId,
+      userRole: req.userRole,
       tracker,
     });
     res.json(bookmarks);
