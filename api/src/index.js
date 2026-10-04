@@ -201,7 +201,7 @@ validateConfig(config)
 
     app.get("/", (req, res) => {
       res.setHeader("Content-Type", "text/plain");
-      res.send(`■ sqtracker running: ${process.env.SQ_SITE_NAME}`).status(200);
+      res.status(200).send(`■ sqtracker running: ${process.env.SQ_SITE_NAME}`);
     });
 
     // Public, read-only configuration used by the Next.js client. Never expose
