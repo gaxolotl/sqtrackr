@@ -27,6 +27,7 @@ import {
 } from "../utils/contentLimits.js";
 import pluginEvents from "../plugins/eventBus.js";
 import { shouldPremoderateUpload } from "../utils/premoderation.js";
+import logAudit from "../utils/audit.js";
 
 const getTorrentCategories = () =>
   JSON.parse(process.env.SQ_TORRENT_CATEGORIES || "{}");
@@ -795,6 +796,7 @@ export const deleteTorrent = async (req, res, next) => {
     }
 
     await Torrent.deleteOne({ infoHash: req.params.infoHash });
+    await logAudit(req.userId, "torrent.deleted", torrent.name);
 
     pluginEvents.emitDetached(
       "torrent.deleted",

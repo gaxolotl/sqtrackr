@@ -20,6 +20,7 @@ import {
   PageHeader,
   SignInRequired,
 } from "@/components/ui";
+import { LinkPicker } from "@/components/link-picker";
 import { apiFetch, apiOrigin } from "@/lib/api";
 import { configCategoryOptions, type CategoryOption } from "@/lib/categories";
 import { useTrackerConfig } from "@/hooks/use-tracker-config";
@@ -564,6 +565,11 @@ export function UploadPage() {
             placeholder="Markdown supported"
             value={description}
             onChange={(event) => setDescription(event.target.value)}
+          />
+          <LinkPicker
+            onInsert={(markdown) =>
+              setDescription((current) => `${current}${markdown}`)
+            }
           />
         </Field>
         <Field label="Tags">

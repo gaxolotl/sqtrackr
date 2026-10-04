@@ -8,6 +8,7 @@ import {
   deleteRequest,
   fetchRequest,
   getRequests,
+  topUpRequest,
 } from "../controllers/request.js";
 
 const router = express.Router();
@@ -35,6 +36,7 @@ export default () => {
   router.get("/:index", limiter, fetchRequest);
   router.delete("/:index", limiter, deleteRequest);
   router.post("/comment/:requestId", limiter, addCommentRequest);
+  router.post("/topup/:requestId", limiter, topUpRequest);
   router.post("/suggest/:requestId", limiter, addCandidate);
   router.post("/accept/:requestId", limiter, acceptCandidate);
   return router;

@@ -26,6 +26,7 @@ import {
   forumRoutes,
   messageRoutes,
   moderationRoutes,
+  notificationRoutes,
 } from "./routes/index.js";
 import {
   register,
@@ -62,6 +63,10 @@ import Request from "./schema/request.js";
 import Announcement from "./schema/announcement.js";
 import Report from "./schema/report.js";
 import Wiki from "./schema/wiki.js";
+import ApiToken from "./schema/apiToken.js";
+import Notification from "./schema/notification.js";
+import Snatch from "./schema/snatch.js";
+import Warning from "./schema/warning.js";
 
 mongoose.set("strictQuery", true);
 
@@ -118,6 +123,10 @@ validateConfig(config)
             Announcement.init(),
             Report.init(),
             Wiki.init(),
+            ApiToken.init(),
+            Notification.init(),
+            Snatch.init(),
+            Warning.init(),
           ]);
           await loadRuntimeSettings();
           await createAdminUser(mail);
@@ -270,6 +279,9 @@ validateConfig(config)
         ),
         avatarMaxSizeKb: Number(process.env.SQ_AVATAR_MAX_SIZE_KB || 512),
         allowGifAvatars: process.env.SQ_ALLOW_GIF_AVATARS !== "false",
+        forumEnabled: process.env.SQ_ENABLE_FORUM !== "false",
+        announcementsEnabled: process.env.SQ_ENABLE_ANNOUNCEMENTS !== "false",
+        rssEnabled: process.env.SQ_ENABLE_RSS !== "false",
       });
     });
     app.get("/user/:username/avatar", serveAvatar);
@@ -286,7 +298,13 @@ validateConfig(config)
     app.post("/verify-email", authLimiter, verifyUserEmail);
 
     // rss feed (auth handled in cookies)
-    app.get("/rss", rssFeed(tracker));
+    app.get("/rss", (req, res, next) => {
+      if (process.env.SQ_ENABLE_RSS === "false") {
+        res.status(403).send("RSS is disabled");
+        return;
+      }
+      rssFeed(tracker)(req, res, next);
+    });
 
     // torrent file download (can download without auth, will not be able to announce)
     app.get("/torrent/download/:infoHash/:userId", downloadTorrent);
@@ -332,6 +350,7 @@ validateConfig(config)
     app.use("/forum", forumRoutes());
     app.use("/messages", messageRoutes());
     app.use("/moderation", moderationRoutes());
+    app.use("/notifications", notificationRoutes());
 
     app.use((err, req, res, next) => {
       if (res.headersSent) {

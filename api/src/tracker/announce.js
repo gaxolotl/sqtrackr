@@ -3,6 +3,8 @@ import bencode from "bencode";
 import User from "../schema/user.js";
 import Torrent from "../schema/torrent.js";
 import Progress from "../schema/progress.js";
+import CheatLog from "../schema/cheatLog.js";
+import Snatch from "../schema/snatch.js";
 import { envFlag } from "../utils/env.js";
 import { getUserRatio } from "../utils/ratio.js";
 import { getUserHitNRuns } from "../utils/hitnrun.js";
@@ -50,6 +52,17 @@ const handleAnnounce = async (req, res) => {
   const params = qs.parse(q, { decoder: unescape });
 
   const infoHash = binaryToHex(params.info_hash);
+
+  // Anti-cheat: deny announces from banned clients (peer-ID prefix match).
+  const peerId = params.peer_id ?? "";
+  const clientBlacklist = JSON.parse(process.env.SQ_CLIENT_BLACKLIST ?? "[]");
+  if (clientBlacklist.some((prefix) => prefix && peerId.startsWith(prefix))) {
+    const response = bencode.encode({
+      "failure reason": "Announce denied: Your client is banned.",
+    });
+    res.send(response);
+    return;
+  }
 
   const torrent = await Torrent.findOne(
     { infoHash },
@@ -103,7 +116,6 @@ const handleAnnounce = async (req, res) => {
   const uploaded = Number(params.uploaded);
   const downloaded = params.event === "started" ? 0 : Number(params.downloaded);
 
-  const peerId = params.peer_id;
   const prevProgressRecord = await Progress.findOne({
     userId: user._id,
     peerId: peerId,
@@ -119,6 +131,36 @@ const handleAnnounce = async (req, res) => {
     downloaded >= alreadyDownloadedSession
       ? downloaded - alreadyDownloadedSession
       : 0;
+
+  // Anti-cheat: flag physically impossible upload speeds. The tracker asks
+  // clients to announce every 30s, so anything far above 10 Gbps sustained
+  // between announces is spoofed. Log only, never deny (avoids false bans).
+  const MAX_REASONABLE_UPLOAD_BPS = 1.25e9;
+  const prevUpdatedAt = prevProgressRecord?.updatedAt
+    ? new Date(prevProgressRecord.updatedAt).getTime()
+    : null;
+  if (prevUpdatedAt && uploadDeltaSession > 0) {
+    const elapsedSeconds = (Date.now() - prevUpdatedAt) / 1000;
+    if (elapsedSeconds >= 10) {
+      const bytesPerSecond = uploadDeltaSession / elapsedSeconds;
+      if (bytesPerSecond > MAX_REASONABLE_UPLOAD_BPS) {
+        const gb = (uploadDeltaSession / BYTES_GB).toFixed(2);
+        const details =
+          `+${gb} GB in ${elapsedSeconds.toFixed(0)}s ` +
+          `(${(bytesPerSecond / 1e6).toFixed(0)} MB/s)`;
+        CheatLog.create({
+          userId: user._id,
+          infoHash,
+          peerId,
+          reason: "impossible-upload-speed",
+          details,
+          created: Date.now(),
+        }).catch((err) =>
+          console.error("[sq] failed to write cheat log:", err.message),
+        );
+      }
+    }
+  }
 
   const [sumUploaded] = await Progress.aggregate([
     {
@@ -190,6 +232,50 @@ const handleAnnounce = async (req, res) => {
 
   if (params.event === "completed") {
     await Torrent.findOneAndUpdate({ infoHash }, { $inc: { downloads: 1 } });
+    // Record the snatch; seedtime accumulates on later seeding announces.
+    try {
+      await Snatch.findOneAndUpdate(
+        { userId: user._id, infoHash },
+        {
+          $setOnInsert: {
+            userId: user._id,
+            infoHash,
+            snatchedAt: Date.now(),
+            seedTime: 0,
+          },
+          $set: { completed: true },
+        },
+        { upsert: true },
+      );
+    } catch (err) {
+      console.error("[sq] failed to record snatch:", err.message);
+    }
+  }
+
+  // Accumulate seedtime on seeding announces, capped per announce so clock
+  // jumps or long gaps cannot credit more than one hour at once.
+  if (Number(params.left) === 0 && prevProgressRecord?.updatedAt) {
+    const elapsedSeconds =
+      (Date.now() - new Date(prevProgressRecord.updatedAt).getTime()) / 1000;
+    if (elapsedSeconds > 0 && elapsedSeconds <= 3600) {
+      try {
+        await Snatch.findOneAndUpdate(
+          { userId: user._id, infoHash },
+          {
+            $setOnInsert: {
+              userId: user._id,
+              infoHash,
+              snatchedAt: Date.now(),
+              completed: false,
+            },
+            $inc: { seedTime: elapsedSeconds },
+          },
+          { upsert: true },
+        );
+      } catch (err) {
+        console.error("[sq] failed to accumulate seedtime:", err.message);
+      }
+    }
   }
 
   return { actor: { userId: user._id.toString() } };

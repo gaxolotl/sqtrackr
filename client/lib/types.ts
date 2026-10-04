@@ -160,6 +160,8 @@ export type UserProfile = {
   bonusPoints?: number;
   ratio?: number;
   hitnruns?: number;
+  snatches?: number;
+  warnings?: UserWarning[];
   downloaded?: { bytes?: number; count?: number };
   uploaded?: { bytes?: number; count?: number };
   torrents?: Torrent[];
@@ -189,11 +191,82 @@ export type TrackerRequest = {
   index: number;
   title: string;
   body?: string;
+  bounty?: number;
+  topUps?: Array<{
+    userId?: string;
+    username?: string | null;
+    amount: number;
+    created: number;
+  }>;
   created: number;
   createdBy?: UserRef;
   candidates?: Torrent[];
   fulfilledBy?: string | { torrent?: string };
   comments?: CommentRecord[];
+};
+
+export type NotificationItem = {
+  _id: string;
+  type: string;
+  title: string;
+  link?: string;
+  read?: boolean;
+  created: number;
+};
+
+export type NotificationPage = {
+  items: NotificationItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export type SavedSearch = {
+  _id: string;
+  name: string;
+  query: string;
+  created: number;
+};
+
+export type UserWarning = {
+  _id: string;
+  reason: string;
+  issuedByUsername?: string | null;
+  created: number;
+  resolved?: boolean;
+  resolvedAt?: number;
+  appeal?: { text: string; created: number };
+};
+
+export type DashboardTorrent = {
+  infoHash: string;
+  name: string;
+};
+
+export type DashboardSnatch = DashboardTorrent & {
+  snatchedAt: number;
+  seedTime: number;
+  uploaded: number;
+  downloaded: number;
+  pastGrace: boolean;
+  ratioOk: boolean;
+  seededEnough: boolean;
+  isHnr: boolean;
+  graceEndsAt: number;
+};
+
+export type DashboardData = {
+  up: number;
+  down: number;
+  ratio: number;
+  bp: number;
+  hitnruns: number;
+  snatches: number;
+  seeding: DashboardTorrent[];
+  leeching: DashboardTorrent[];
+  warnings: DashboardSnatch[];
+  currentHnrs: DashboardSnatch[];
+  recentSnatches: DashboardSnatch[];
 };
 
 export type Report = {
@@ -265,6 +338,9 @@ export type TrackerConfig = {
   avatarMaxResolution: number;
   avatarMaxSizeKb: number;
   allowGifAvatars: boolean;
+  forumEnabled: boolean;
+  announcementsEnabled: boolean;
+  rssEnabled: boolean;
   trackerUrl: string;
 };
 

@@ -1,7 +1,12 @@
+import mongoose from "mongoose";
 import Report from "../schema/report.js";
 import Torrent from "../schema/torrent.js";
+import TorrentSubmission from "../schema/torrentSubmission.js";
 import User from "../schema/user.js";
 import Progress from "../schema/progress.js";
+import CheatLog from "../schema/cheatLog.js";
+import AuditLog from "../schema/auditLog.js";
+import logAudit from "../utils/audit.js";
 import Invite from "../schema/invite.js";
 import Request from "../schema/request.js";
 import Comment from "../schema/comment.js";
@@ -194,8 +199,65 @@ export const setReportResolved = async (req, res, next) => {
         },
       },
     );
+    await logAudit(req.userId, "report.resolved", String(req.params.reportId));
 
     res.sendStatus(200);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const resolveManyReports = async (req, res, next) => {
+  try {
+    if (!canModerate(req.userRole)) {
+      res.status(401).send("You do not have permission to resolve reports");
+      return;
+    }
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    const validIds = ids.filter((id) => mongoose.isValidObjectId(id));
+    if (!validIds.length) {
+      res.status(400).send("No valid report ids");
+      return;
+    }
+    if (validIds.length > 100) {
+      res.status(400).send("Too many reports at once (maximum 100)");
+      return;
+    }
+    const result = await Report.updateMany(
+      { _id: { $in: validIds }, solved: false },
+      {
+        $set: {
+          solved: true,
+          solvedAt: Date.now(),
+          updated: Date.now(),
+        },
+      },
+    );
+    await logAudit(
+      req.userId,
+      "report.resolved-many",
+      `${result.modifiedCount} reports`,
+    );
+    res.status(200).json({ resolved: result.modifiedCount });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const getQueueCounts = async (req, res, next) => {
+  try {
+    if (!canModerate(req.userRole)) {
+      res.status(401).send("You do not have permission to view queues");
+      return;
+    }
+    const [pendingSubmissions, openReports] = await Promise.all([
+      TorrentSubmission.countDocuments({
+        status: { $in: ["pending", "approving"] },
+        requiresReview: { $ne: false },
+      }),
+      Report.countDocuments({ solved: false }),
+    ]);
+    res.json({ pendingSubmissions, openReports });
   } catch (e) {
     next(e);
   }
@@ -496,6 +558,91 @@ export const listTorrentPeers = (tracker) => async (req, res, next) => {
         seeder: peer.seeder,
         username: usernameByPeerId.get(peer.peerId) ?? null,
       })),
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const listCheatLog = async (req, res, next) => {
+  try {
+    if (!canModerate(req.userRole)) {
+      res.status(401).send("You do not have permission to view the cheat log");
+      return;
+    }
+
+    const page = Math.max(parseInt(req.params.page, 10) || 0, 0);
+    const perPage = 25;
+    const entries = await CheatLog.find({})
+      .sort({ created: -1 })
+      .skip(page * perPage)
+      .limit(perPage)
+      .lean();
+
+    const userIds = [
+      ...new Set(
+        entries.map((entry) => entry.userId && String(entry.userId)).filter(Boolean),
+      ),
+    ];
+    const usernames = new Map();
+    if (userIds.length) {
+      const users = await User.find({ _id: { $in: userIds } })
+        .select("username")
+        .lean();
+      users.forEach((user) => usernames.set(String(user._id), user.username));
+    }
+
+    res.json(
+      entries.map((entry) => ({
+        ...entry,
+        username: usernames.get(String(entry.userId)) ?? null,
+      })),
+    );
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const listAuditLog = async (req, res, next) => {
+  try {
+    if (!canModerate(req.userRole)) {
+      res.status(401).send("You do not have permission to view the audit log");
+      return;
+    }
+
+    const page = Math.max(parseInt(req.params.page, 10) || 0, 0);
+    const perPage = 25;
+    const [entries, total] = await Promise.all([
+      AuditLog.find({})
+        .sort({ created: -1 })
+        .skip(page * perPage)
+        .limit(perPage)
+        .lean(),
+      AuditLog.countDocuments(),
+    ]);
+
+    const actorIds = [
+      ...new Set(
+        entries.map((entry) => entry.actorId && String(entry.actorId)).filter(Boolean),
+      ),
+    ];
+    const actors = actorIds.length
+      ? await User.find({ _id: { $in: actorIds } })
+          .select("username")
+          .lean()
+      : [];
+    const actorNames = new Map(
+      actors.map((actor) => [String(actor._id), actor.username]),
+    );
+
+    res.json({
+      items: entries.map((entry) => ({
+        ...entry,
+        actorUsername: actorNames.get(String(entry.actorId)) ?? null,
+      })),
+      total,
+      page,
+      pageSize: perPage,
     });
   } catch (e) {
     next(e);

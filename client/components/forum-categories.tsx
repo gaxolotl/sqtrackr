@@ -6,13 +6,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-context";
 import { ApiState, PageHeader, SignInRequired } from "@/components/ui";
+import { FeatureDisabled } from "@/components/feature-disabled";
 import { useApiData } from "@/hooks/use-api-data";
+import { useTrackerConfig } from "@/hooks/use-tracker-config";
 import { forumIcon } from "@/lib/forum-icons";
 import { formatDateTime } from "@/lib/format";
 import type { ForumCategory } from "@/lib/types";
 
 export function ForumCategories() {
   const { session } = useAuth();
+  const { config } = useTrackerConfig();
   const router = useRouter();
   const { data, error, loading } = useApiData<ForumCategory[]>(
     session ? "/forum/categories" : null,
@@ -25,6 +28,10 @@ export function ForumCategories() {
         <SignInRequired />
       </main>
     );
+  }
+
+  if (!config.forumEnabled) {
+    return <FeatureDisabled name="Forum" />;
   }
 
   function search(event: FormEvent<HTMLFormElement>) {

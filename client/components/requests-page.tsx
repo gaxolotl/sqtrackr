@@ -120,6 +120,9 @@ export function RequestsPage() {
                     <p>
                       Posted {formatDateTime(item.created)} by{" "}
                       <span>{item.createdBy?.username ?? "Unknown"}</span>
+                      {(item.bounty ?? 0) > 0
+                        ? ` · Bounty: ${item.bounty} BP`
+                        : ""}
                     </p>
                   </div>
                   <span className="status-pill">

@@ -10,6 +10,7 @@ import wikiRoutes from "./wiki.js";
 import forumRoutes from "./forum.js";
 import messageRoutes from "./messages.js";
 import moderationRoutes from "./moderation.js";
+import notificationRoutes from "./notifications.js";
 
 export {
   accountRoutes,
@@ -24,4 +25,5 @@ export {
   forumRoutes,
   messageRoutes,
   moderationRoutes,
+  notificationRoutes,
 };

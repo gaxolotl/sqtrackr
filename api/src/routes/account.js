@@ -1,9 +1,19 @@
 import express from "express";
 import ratelimit from "express-rate-limit";
 import {
+  appealWarning,
+  createApiToken,
+  deleteSavedSearch,
   fetchInvites,
   generateInvite,
   changePassword,
+  getDashboard,
+  getOwnWarnings,
+  getSavedSearches,
+  listApiTokens,
+  revokeApiToken,
+  rotateAnnounceUid,
+  signOutEverywhere,
   getUserStats,
   getUserRole,
   getUserVerifiedEmailStatus,
@@ -13,6 +23,7 @@ import {
   disableTotp,
   deleteAccount,
   getUserBookmarks,
+  saveSearch,
 } from "../controllers/user.js";
 import {
   deleteAvatar,
@@ -46,6 +57,17 @@ export default (tracker, mail) => {
   router.post("/generate-invite", limiter, generateInvite(mail));
   router.post("/change-password", limiter, changePassword(mail));
   router.get("/get-stats", limiter, getUserStats);
+  router.get("/dashboard", limiter, getDashboard);
+  router.get("/searches", limiter, getSavedSearches);
+  router.post("/searches", limiter, saveSearch);
+  router.delete("/searches/:searchId", limiter, deleteSavedSearch);
+  router.get("/warnings", limiter, getOwnWarnings);
+  router.post("/warnings/:warningId/appeal", limiter, appealWarning);
+  router.get("/tokens", limiter, listApiTokens);
+  router.post("/tokens", limiter, createApiToken);
+  router.delete("/tokens/:tokenId", limiter, revokeApiToken);
+  router.post("/rotate-uid", limiter, rotateAnnounceUid);
+  router.post("/sign-out-all", limiter, signOutEverywhere);
   router.get("/get-role", limiter, getUserRole);
   router.get("/get-verified", limiter, getUserVerifiedEmailStatus);
   router.post("/buy", limiter, buyItems);

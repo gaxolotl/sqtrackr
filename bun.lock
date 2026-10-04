@@ -14,6 +14,7 @@
       "dependencies": {
         "@sentry/node": "^7.36.0",
         "@sentry/tracing": "^7.120.4",
+        "@sqtrackr/plugin-collages": "workspace:*",
         "@sqtrackr/plugin-reseed-radar": "workspace:*",
         "@sqtrackr/plugin-sdk": "workspace:*",
         "bcrypt": "^6.0.0",
@@ -51,6 +52,7 @@
       "name": "@sqtracker/client",
       "version": "2.1.0",
       "dependencies": {
+        "@sqtrackr/plugin-collages": "workspace:*",
         "@sqtrackr/plugin-reseed-radar": "workspace:*",
         "@sqtrackr/plugin-sdk": "workspace:*",
         "lucide-react": "1.42.0",
@@ -75,6 +77,23 @@
         "react": "19.2.8",
       },
       "peerDependencies": {
+        "react": "*",
+      },
+    },
+    "plugins/collages": {
+      "name": "@sqtrackr/plugin-collages",
+      "version": "1.0.0",
+      "dependencies": {
+        "@sqtrackr/plugin-sdk": "workspace:*",
+        "lucide-react": "1.42.0",
+      },
+      "devDependencies": {
+        "@types/react": "19.2.18",
+        "next": "16.3.4",
+        "react": "19.2.8",
+      },
+      "peerDependencies": {
+        "next": "*",
         "react": "*",
       },
     },
@@ -345,6 +364,8 @@
     "@sqtracker/api": ["@sqtracker/api@workspace:api"],
 
     "@sqtracker/client": ["@sqtracker/client@workspace:client"],
+
+    "@sqtrackr/plugin-collages": ["@sqtrackr/plugin-collages@workspace:plugins/collages"],
 
     "@sqtrackr/plugin-reseed-radar": ["@sqtrackr/plugin-reseed-radar@workspace:plugins/reseed-radar"],
 

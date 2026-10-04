@@ -65,6 +65,12 @@ module.exports = {
     // A user has committed a hit'n'run when a torrent is fully downloaded and not seeded to a 1:1 ratio.
     SQ_MAXIMUM_HIT_N_RUNS: 1,
 
+    // Minimum seeding time in hours to avoid a hit'n'run (reaching 1:1 ratio also clears it).
+    SQ_MIN_SEEDTIME_HOURS: 72,
+
+    // Hours after snatching before an unseeded torrent counts as a hit'n'run.
+    SQ_HNR_GRACE_HOURS: 24,
+
     // A map of torrent categories that can be selected when uploading.
     // Each has an array of zero or more sources available within that category.
     SQ_TORRENT_CATEGORIES: {
@@ -99,6 +105,10 @@ module.exports = {
     // An array of blacklisted file extensions. Torrents containing files with these extensions will fail to upload.
     SQ_EXTENSION_BLACKLIST: ["exe"],
 
+    // An array of banned BitTorrent client peer-ID prefixes (e.g. "-AZ3020-").
+    // Announces from matching clients are denied. Empty array disables.
+    SQ_CLIENT_BLACKLIST: [],
+
     // Default site locale. See `client/locales/index.js` for available options.
     SQ_SITE_DEFAULT_LOCALE: "en",
 
@@ -106,6 +116,12 @@ module.exports = {
     SQ_AVATAR_MAX_RESOLUTION: 512,
     SQ_AVATAR_MAX_SIZE_KB: 512,
     SQ_ALLOW_GIF_AVATARS: true,
+
+    // Set any of these to false to disable the section without deleting
+    // its data. Disabled sections return 403 and hide from navigation.
+    SQ_ENABLE_FORUM: true,
+    SQ_ENABLE_ANNOUNCEMENTS: true,
+    SQ_ENABLE_RSS: true,
 
     // The URL of your tracker site.
     // For local development, this should be `http://127.0.0.1:3000`.

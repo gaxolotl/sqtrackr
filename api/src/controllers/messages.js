@@ -4,6 +4,7 @@ import Message from "../schema/message.js";
 import User from "../schema/user.js";
 import { getContentLimits } from "../utils/contentLimits.js";
 import { sendDirectMessage } from "../utils/directMessage.js";
+import pushNotification from "../utils/notify.js";
 
 const parsePage = (value) => Math.max(parseInt(value, 10) || 0, 0);
 
@@ -445,6 +446,17 @@ export const sendMessage = async (req, res, next) => {
 
     await message.save();
     await conversation.save();
+    const sender = await User.findOne({ _id: req.userId })
+      .select("username")
+      .lean();
+    for (const participant of conversation.participants ?? []) {
+      if (String(participant) === String(req.userId)) continue;
+      await pushNotification(participant, {
+        type: "message",
+        title: `New message from ${sender?.username ?? "Unknown"}`,
+        link: `/messages/${conversation._id}`,
+      });
+    }
     res.send({ _id: message._id });
   } catch (e) {
     next(e);

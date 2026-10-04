@@ -1,0 +1,24 @@
+{
+  "name": "@sqtrackr/plugin-collages",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./client": "./client.tsx",
+    "./manifest": "./manifest.js",
+    "./server": "./server.js"
+  },
+  "dependencies": {
+    "@sqtrackr/plugin-sdk": "workspace:*",
+    "lucide-react": "1.42.0"
+  },
+  "peerDependencies": {
+    "next": "*",
+    "react": "*"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.18",
+    "next": "16.3.4",
+    "react": "19.2.8"
+  }
+}

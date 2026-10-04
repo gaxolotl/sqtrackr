@@ -7,6 +7,7 @@ import {
   getContentLimits,
   validateContentText,
 } from "../utils/contentLimits.js";
+import pushNotification from "../utils/notify.js";
 
 export const createRequest = async (req, res, next) => {
   try {
@@ -30,10 +31,27 @@ export const createRequest = async (req, res, next) => {
 
       const index = existing + 1;
 
+      const bounty = Math.max(parseInt(req.body.bounty, 10) || 0, 0);
+      if (bounty > 0) {
+        const payer = await User.findOneAndUpdate(
+          { _id: req.userId, bonusPoints: { $gte: bounty } },
+          { $inc: { bonusPoints: -bounty } },
+        ).lean();
+        if (!payer) {
+          res.status(400).send("Not enough bonus points for that bounty");
+          return;
+        }
+      }
+
       const request = new Request({
         index,
         title,
         body,
+        bounty,
+        topUps:
+          bounty > 0
+            ? [{ userId: req.userId, amount: bounty, created: Date.now() }]
+            : [],
         createdBy: req.userId,
         created: Date.now(),
         candidates: [],
@@ -196,9 +214,78 @@ export const fetchRequest = async (req, res, next) => {
       res.status(404).send("Request could not be found");
       return;
     }
+    if (Array.isArray(request.topUps) && request.topUps.length) {
+      const topUpUserIds = [
+        ...new Set(
+          request.topUps
+            .map((topUp) => topUp.userId && String(topUp.userId))
+            .filter(Boolean),
+        ),
+      ];
+      const topUpUsers = await User.find({ _id: { $in: topUpUserIds } })
+        .select("username")
+        .lean();
+      const usernames = new Map(
+        topUpUsers.map((user) => [String(user._id), user.username]),
+      );
+      request.topUps = request.topUps.map((topUp) => ({
+        ...topUp,
+        username: usernames.get(String(topUp.userId)) ?? null,
+      }));
+    }
     res.send(request);
   } catch (e) {
     console.error(e);
+    next(e);
+  }
+};
+
+export const topUpRequest = async (req, res, next) => {
+  try {
+    const amount = parseInt(req.body.amount, 10);
+    if (!Number.isInteger(amount) || amount < 1) {
+      res.status(400).send("Top-up amount must be a positive whole number");
+      return;
+    }
+
+    const { requestId } = req.params;
+    if (!mongoose.isValidObjectId(requestId)) {
+      res.status(404).send("Request does not exist");
+      return;
+    }
+
+    const request = await Request.findOne({ _id: requestId }).lean();
+    if (!request) {
+      res.status(404).send("Request does not exist");
+      return;
+    }
+    if (request.fulfilledBy) {
+      res.status(409).send("Request is already fulfilled");
+      return;
+    }
+
+    const payer = await User.findOneAndUpdate(
+      { _id: req.userId, bonusPoints: { $gte: amount } },
+      { $inc: { bonusPoints: -amount } },
+    ).lean();
+    if (!payer) {
+      res.status(400).send("Not enough bonus points for that top-up");
+      return;
+    }
+
+    const updated = await Request.findOneAndUpdate(
+      { _id: requestId },
+      {
+        $inc: { bounty: amount },
+        $push: {
+          topUps: { userId: req.userId, amount, created: Date.now() },
+        },
+      },
+      { new: true },
+    ).lean();
+
+    res.status(200).send({ bounty: updated.bounty });
+  } catch (e) {
     next(e);
   }
 };
@@ -387,13 +474,29 @@ export const acceptCandidate = async (req, res, next) => {
           $inc: {
             bonusPoints:
               process.env.SQ_BP_EARNED_PER_FILLED_REQUEST *
-              (torrent.uploadedBy.toString() ===
-              candidate.suggestedBy.toString()
-                ? 2
-                : 1),
+                (torrent.uploadedBy.toString() ===
+                candidate.suggestedBy.toString()
+                  ? 2
+                  : 1) +
+              (request.bounty ?? 0),
           },
         },
       );
+
+      const contributorIds = [
+        ...new Set(
+          (request.topUps ?? [])
+            .map((topUp) => topUp.userId && String(topUp.userId))
+            .filter(Boolean),
+        ),
+      ].filter((id) => id !== req.userId.toString());
+      for (const contributorId of contributorIds) {
+        await pushNotification(contributorId, {
+          type: "request-filled",
+          title: `Request "${request.title}" was filled`,
+          link: `/requests/${request.index}`,
+        });
+      }
 
       res.status(200).send({ torrent: torrent._id });
     } catch (e) {

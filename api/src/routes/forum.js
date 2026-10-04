@@ -39,6 +39,10 @@ const limiter = ratelimit({
 });
 
 export default () => {
+  if (process.env.SQ_ENABLE_FORUM === "false") {
+    router.use((req, res) => res.status(403).send("Forum is disabled"));
+    return router;
+  }
   router.get("/categories", limiter, getForumCategories);
   router.post("/category", limiter, createForumCategory);
   router.post("/category/:categoryId/edit", limiter, editForumCategory);

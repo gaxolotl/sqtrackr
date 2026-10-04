@@ -1,5 +1,6 @@
 import SiteSettings from "../schema/siteSettings.js";
 import { isAdmin } from "../utils/roles.js";
+import logAudit from "../utils/audit.js";
 import {
   applyRuntimeSettings,
   getRuntimeSettings,
@@ -52,6 +53,7 @@ export const updateSettings = async (req, res, next) => {
       { upsert: true },
     );
     applyRuntimeSettings(settings);
+    await logAudit(req.userId, "settings.updated", "runtime");
     res.json(settings);
   } catch (error) {
     if (error.name === "ValidationError") {

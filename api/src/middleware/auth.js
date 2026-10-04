@@ -1,5 +1,7 @@
+import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import User from "../schema/user.js";
+import ApiToken from "../schema/apiToken.js";
 
 const auth = async (req, res, next) => {
   if (req.headers.authorization) {
@@ -10,12 +12,59 @@ const auth = async (req, res, next) => {
       res.status(401).send("Invalid authentication token");
       return;
     }
+    // Personal API tokens are random strings; JWTs are verified below.
+    if (token.startsWith("sq_")) {
+      try {
+        const tokenHash = crypto
+          .createHash("sha256")
+          .update(token)
+          .digest("hex");
+        const apiToken = await ApiToken.findOne({
+          tokenHash,
+          revoked: false,
+        }).lean();
+        if (!apiToken) {
+          res.status(401).send("Invalid authentication token");
+          return;
+        }
+        const user = await User.findOne(
+          { _id: apiToken.userId },
+          { role: 1, banned: 1, banReason: 1 },
+        ).lean();
+        if (!user) {
+          res.status(401).send("Invalid authentication token");
+          return;
+        }
+        if (user.banned) {
+          const reason = user.banReason || "none";
+          res.status(403).send(`User is banned. Reason: ${reason}`);
+          return;
+        }
+        req.userId = user._id;
+        req.userRole = user.role;
+        ApiToken.updateOne(
+          { _id: apiToken._id },
+          { $set: { lastUsedAt: Date.now() } },
+        ).catch(() => {});
+        next();
+      } catch (err) {
+        console.error("[sq] authentication error:", err.message);
+        res.status(401).send("Invalid authentication token");
+      }
+      return;
+    }
     try {
       const decoded = jwt.verify(token, process.env.SQ_JWT_SECRET);
       if (decoded) {
         const user = await User.findOne(
           { _id: decoded.id },
-          { role: 1, banned: 1, banReason: 1, pwdVersion: 1 },
+          {
+            role: 1,
+            banned: 1,
+            banReason: 1,
+            pwdVersion: 1,
+            pwdVersionUpdatedAt: 1,
+          },
         ).lean();
         if (user) {
           if (user.banned) {
@@ -27,6 +76,16 @@ const auth = async (req, res, next) => {
             decoded.pwdVersion &&
             user.pwdVersion &&
             decoded.pwdVersion !== user.pwdVersion
+          ) {
+            res.status(401).send("Invalid authentication token");
+            return;
+          }
+          // "Sign out everywhere" invalidates tokens issued before the bump,
+          // with a small skew allowance for same-second re-logins.
+          if (
+            user.pwdVersionUpdatedAt &&
+            (!decoded.iat ||
+              decoded.iat * 1000 < user.pwdVersionUpdatedAt - 5000)
           ) {
             res.status(401).send("Invalid authentication token");
             return;

@@ -41,6 +41,8 @@ import {
 import { FormEvent, useEffect, useState } from "react";
 import { useTrackerConfig } from "@/hooks/use-tracker-config";
 import { useUnreadMessages } from "@/hooks/use-unread-messages";
+import { useModerationQueue } from "@/hooks/use-moderation-queue";
+import { NotificationsBell } from "@/components/notifications-bell";
 import { useApiData } from "@/hooks/use-api-data";
 import { canModerate } from "@/lib/api";
 import { UserAvatar } from "@/components/user-avatar";
@@ -65,6 +67,7 @@ const pageTitleRoutes: Array<[string, MessageKey]> = [
   ["/forum", "forum"],
   ["/login", "login"],
   ["/messages", "messages"],
+  ["/notifications", "notifications"],
   ["/moderation", "moderation"],
   ["/register", "register"],
   ["/reports", "moderation"],
@@ -98,6 +101,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { locale, setLocale, t } = useI18n();
   const { config } = useTrackerConfig();
   const unreadMessages = useUnreadMessages(Boolean(session));
+  const moderationQueue = useModerationQueue(
+    Boolean(session) && canModerate(session?.role),
+  );
   const ownProfile = useApiData<{ avatarUpdated?: number }>(
     session ? "/account/profile" : null,
   );
@@ -160,7 +166,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
-  const accountItems: Array<{ label: string; href: string; icon: LucideIcon }> =
+  const accountItems: Array<{
+    label: string;
+    href: string;
+    icon: LucideIcon;
+    badge?: number;
+  }> =
     session
       ? [
           ...(canModerate(session.role)
@@ -169,6 +180,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   label: t("moderation"),
                   href: "/moderation",
                   icon: ShieldCheck,
+                  badge: moderationQueue,
                 },
               ]
             : []),
@@ -182,7 +194,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ? []
             : [{ label: t("register"), href: "/register", icon: UserPlus }]),
         ];
-  const visiblePrimaryItems = session ? primaryItems : [];
+  const featureFlags: Record<string, boolean> = {
+    "/forum": config.forumEnabled,
+    "/announcements": config.announcementsEnabled,
+    "/rss": config.rssEnabled,
+  };
+  const visiblePrimaryItems = session
+    ? primaryItems.filter((item) => featureFlags[item.href] ?? true)
+    : [];
 
   const browserTitle = config.showPageInTitle
     ? `${config.siteName} • ${plugins.resolveTitle(pathname) ?? t(pageTitleKey(pathname))}`
@@ -211,27 +230,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <nav className="sidebar-nav" aria-label="Main navigation">
-            {visiblePrimaryItems.map(({ label, href, icon: Icon }) => (
-              <Link
-                className={`nav-link ${isActive(href) ? "active" : ""}`}
-                href={href}
-                key={label}
-                onClick={() => setMenuOpen(false)}
-              >
-                <span className="nav-label">
-                  {t(label)}
-                  {label === "messages" && unreadMessages > 0 ? (
-                    <span
-                      className="nav-badge"
-                      aria-label={`${unreadMessages} unread messages`}
-                    >
-                      {unreadMessages > 99 ? "99+" : unreadMessages}
-                    </span>
-                  ) : null}
-                </span>
-                <Icon aria-hidden="true" />
-              </Link>
-            ))}
+            {visiblePrimaryItems.map(({ label, href, icon: Icon }) => {
+              const badge = label === "messages" ? unreadMessages : 0;
+              return (
+                <Link
+                  className={`nav-link ${isActive(href) ? "active" : ""}`}
+                  href={href}
+                  key={label}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  <span className="nav-label">
+                    {t(label)}
+                    {badge > 0 ? (
+                      <span
+                        className="nav-badge"
+                        aria-label={`${badge} unread ${label}`}
+                      >
+                        {badge > 99 ? "99+" : badge}
+                      </span>
+                    ) : null}
+                  </span>
+                  <Icon aria-hidden="true" />
+                </Link>
+              );
+            })}
             {plugins.navigation.map((item) => {
               const Icon = item.icon ?? Puzzle;
               return (
@@ -251,14 +273,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </PluginBoundary>
               );
             })}
-            {accountItems.map(({ label, href, icon: Icon }) => (
+            {accountItems.map(({ label, href, icon: Icon, badge }) => (
               <Link
                 className={`nav-link ${isActive(href) ? "active" : ""}`}
                 href={href}
                 key={label}
                 onClick={() => setMenuOpen(false)}
               >
-                <span>{label}</span>
+                <span className="nav-label">
+                  {label}
+                  {badge ? (
+                    <span
+                      className="nav-badge"
+                      aria-label={`${badge} items awaiting moderation`}
+                    >
+                      {badge > 99 ? "99+" : badge}
+                    </span>
+                  ) : null}
+                </span>
                 <Icon aria-hidden="true" />
               </Link>
             ))}
@@ -337,6 +369,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ) : (
               <span className="topbar-spacer" />
             )}
+            {session ? <NotificationsBell /> : null}
             <div className="language-menu">
               <button
                 className="language-trigger"

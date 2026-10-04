@@ -2,6 +2,7 @@
 
 import { KeyboardEvent, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-context";
+import { AuditLogPage } from "@/components/audit-log-page";
 import { MembersTab } from "@/components/members-tab";
 import { ReportsPage } from "@/components/reports-page";
 import { StatsPage } from "@/components/stats-page";
@@ -9,7 +10,7 @@ import { UploadModerationPage } from "@/components/upload-moderation-page";
 import { PageHeader, SignInRequired } from "@/components/ui";
 import { canModerate } from "@/lib/api";
 
-export type ModerationTab = "uploads" | "reports" | "members" | "stats";
+export type ModerationTab = "uploads" | "reports" | "members" | "stats" | "audit";
 
 export function ModerationPage({
   initialTab = "uploads",
@@ -31,6 +32,7 @@ export function ModerationPage({
     reports: useRef<HTMLButtonElement>(null),
     members: useRef<HTMLButtonElement>(null),
     stats: useRef<HTMLButtonElement>(null),
+    audit: useRef<HTMLButtonElement>(null),
   };
 
   if (!session) {
@@ -46,6 +48,7 @@ export function ModerationPage({
     { id: "reports", label: "Reports" },
     { id: "members", label: "Members", adminOnly: true },
     { id: "stats", label: "Stats", adminOnly: true },
+    { id: "audit", label: "Audit log" },
   ];
   const visibleTabs = tabs.filter((entry) => !entry.adminOnly || isAdmin);
   const activeTab = visibleTabs.some((entry) => entry.id === tab)
@@ -111,6 +114,7 @@ export function ModerationPage({
             {activeTab === "reports" ? <ReportsPage embedded /> : null}
             {activeTab === "members" ? <MembersTab embedded /> : null}
             {activeTab === "stats" ? <StatsPage embedded /> : null}
+            {activeTab === "audit" ? <AuditLogPage embedded /> : null}
           </section>
         </>
       )}

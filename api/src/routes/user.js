@@ -3,6 +3,8 @@ import ratelimit from "express-rate-limit";
 import {
   banUser,
   fetchUser,
+  issueWarning,
+  resolveWarning,
   setUserRole,
   unbanUser,
 } from "../controllers/user.js";
@@ -30,6 +32,8 @@ export default (tracker) => {
   router.post("/ban/:username", limiter, banUser);
   router.post("/unban/:username", limiter, unbanUser);
   router.post("/role/:username", limiter, setUserRole);
+  router.post("/warn/:username", limiter, issueWarning);
+  router.post("/unwarn/:warningId", limiter, resolveWarning);
   router.get("/:username", limiter, fetchUser(tracker));
   return router;
 };

@@ -1,18 +1,26 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import mongoose from "mongoose";
 import speakeasy from "speakeasy";
 import qrcode from "qrcode";
 import User from "../schema/user.js";
 import Invite from "../schema/invite.js";
 import Progress from "../schema/progress.js";
+import Snatch from "../schema/snatch.js";
+import Torrent from "../schema/torrent.js";
+import ApiToken from "../schema/apiToken.js";
+import { getAnnounceUrl } from "../utils/trackerUrl.js";
 import { getTorrentsPage } from "./torrent.js";
 import { getUserRatio } from "../utils/ratio.js";
-import { getUserHitNRuns } from "../utils/hitnrun.js";
+import { getSnatchDetails, getUserHitNRuns } from "../utils/hitnrun.js";
 import { BYTES_GB } from "../tracker/announce.js";
 import { envFlag } from "../utils/env.js";
-import { isAdmin, VALID_ROLES } from "../utils/roles.js";
+import { isAdmin, VALID_ROLES, canModerate } from "../utils/roles.js";
 import { getContentLimits } from "../utils/contentLimits.js";
+import logAudit from "../utils/audit.js";
+import pushNotification from "../utils/notify.js";
+import Warning from "../schema/warning.js";
 
 const validatePasswordStrength = (password, res) => {
   if (
@@ -909,7 +917,7 @@ export const fetchUser = (tracker) => async (req, res, next) => {
       return;
     }
 
-    const [{ ratio }, hitnruns, { torrents }] = await Promise.all([
+    const [{ ratio }, hitnruns, { torrents }, snatches] = await Promise.all([
       getUserRatio(user._id),
       getUserHitNRuns(user._id),
       getTorrentsPage({
@@ -918,10 +926,35 @@ export const fetchUser = (tracker) => async (req, res, next) => {
         userRole: req.userRole,
         tracker,
       }),
+      Snatch.countDocuments({ userId: user._id }),
     ]);
     user.ratio = ratio;
     user.hitnruns = hitnruns;
+    user.snatches = snatches;
     user.torrents = torrents;
+
+    if (canModerate(req.userRole)) {
+      const warnings = await Warning.find({ userId: user._id })
+        .sort({ created: -1 })
+        .lean();
+      const issuerIds = [
+        ...new Set(
+          warnings.map((warning) => String(warning.issuedBy)).filter(Boolean),
+        ),
+      ];
+      const issuers = issuerIds.length
+        ? await User.find({ _id: { $in: issuerIds } })
+            .select("username")
+            .lean()
+        : [];
+      const issuerNames = new Map(
+        issuers.map((issuer) => [String(issuer._id), issuer.username]),
+      );
+      user.warnings = warnings.map((warning) => ({
+        ...warning,
+        issuedByUsername: issuerNames.get(String(warning.issuedBy)) ?? null,
+      }));
+    }
 
     res.json(user);
   } catch (e) {
@@ -941,12 +974,178 @@ export const getUserStats = async (req, res, next) => {
       return;
     }
 
-    const [ratioStats, hitnruns] = await Promise.all([
+    const [ratioStats, hitnruns, snatches] = await Promise.all([
       getUserRatio(user._id),
       getUserHitNRuns(user._id),
+      Snatch.countDocuments({ userId: user._id }),
     ]);
 
-    res.json({ ...ratioStats, bp: Number(user.bonusPoints ?? 0), hitnruns });
+    res.json({
+      ...ratioStats,
+      bp: Number(user.bonusPoints ?? 0),
+      hitnruns,
+      snatches,
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const getDashboard = async (req, res, next) => {
+  try {
+    const user = await User.findOne({ _id: req.userId }).lean();
+    if (!user) {
+      res.status(404).send("User does not exist");
+      return;
+    }
+
+    const ratioStats = await getUserRatio(user._id);
+    const { details, legacyCount } = await getSnatchDetails(user._id);
+    const hitnruns =
+      details.filter((snatch) => snatch.isHnr).length + legacyCount;
+
+    const hashes = [...new Set(details.map((snatch) => snatch.infoHash))];
+    const torrents = hashes.length
+      ? await Torrent.find({ infoHash: { $in: hashes } })
+          .select("infoHash name")
+          .lean()
+      : [];
+    const names = new Map(
+      torrents.map((torrent) => [torrent.infoHash, torrent.name]),
+    );
+
+    const active = await Progress.find({
+      userId: user._id,
+      peerId: { $exists: true },
+    })
+      .select("infoHash left")
+      .lean();
+    const activeByHash = new Map();
+    for (const record of active) {
+      const current = activeByHash.get(record.infoHash) ?? {
+        seeding: false,
+        leeching: false,
+      };
+      if (Number(record.left) === 0) current.seeding = true;
+      else current.leeching = true;
+      activeByHash.set(record.infoHash, current);
+    }
+    const activeHashes = [...activeByHash.keys()];
+    const activeTorrents = activeHashes.length
+      ? await Torrent.find({ infoHash: { $in: activeHashes } })
+          .select("infoHash name")
+          .lean()
+      : [];
+    for (const torrent of activeTorrents) {
+      names.set(torrent.infoHash, torrent.name);
+    }
+
+    const seeding = [];
+    const leeching = [];
+    for (const [infoHash, state] of activeByHash) {
+      const entry = { infoHash, name: names.get(infoHash) ?? infoHash };
+      if (state.seeding) seeding.push(entry);
+      if (state.leeching) leeching.push(entry);
+    }
+
+    const withNames = details.map((snatch) => ({
+      ...snatch,
+      name: names.get(snatch.infoHash) ?? snatch.infoHash,
+    }));
+    const warnings = withNames
+      .filter((snatch) => !snatch.isHnr && !snatch.ratioOk && !snatch.seededEnough)
+      .sort((a, b) => a.graceEndsAt - b.graceEndsAt)
+      .slice(0, 10);
+    const currentHnrs = withNames
+      .filter((snatch) => snatch.isHnr)
+      .sort((a, b) => a.graceEndsAt - b.graceEndsAt)
+      .slice(0, 10);
+    const recentSnatches = [...withNames]
+      .sort((a, b) => (b.snatchedAt ?? 0) - (a.snatchedAt ?? 0))
+      .slice(0, 10);
+
+    res.json({
+      ...ratioStats,
+      bp: Number(user.bonusPoints ?? 0),
+      hitnruns,
+      snatches: details.length,
+      seeding: seeding.slice(0, 25),
+      leeching: leeching.slice(0, 25),
+      warnings,
+      currentHnrs,
+      recentSnatches,
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const getSavedSearches = async (req, res, next) => {
+  try {
+    const user = await User.findOne({ _id: req.userId })
+      .select("savedSearches")
+      .lean();
+    if (!user) {
+      res.status(404).send("User does not exist");
+      return;
+    }
+    res.json(user.savedSearches ?? []);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const saveSearch = async (req, res, next) => {
+  try {
+    const name = String(req.body?.name ?? "").trim().slice(0, 100);
+    const query = String(req.body?.query ?? "").trim().slice(0, 200);
+    if (!name || !query) {
+      res.status(400).send("Name and query are required");
+      return;
+    }
+    const user = await User.findOne({ _id: req.userId })
+      .select("savedSearches")
+      .lean();
+    if (!user) {
+      res.status(404).send("User does not exist");
+      return;
+    }
+    if ((user.savedSearches ?? []).length >= 25) {
+      res.status(409).send("Too many saved searches (maximum 25)");
+      return;
+    }
+    const updated = await User.findOneAndUpdate(
+      { _id: req.userId },
+      { $push: { savedSearches: { name, query, created: Date.now() } } },
+      { new: true },
+    )
+      .select("savedSearches")
+      .lean();
+    res.status(200).json(updated.savedSearches ?? []);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const deleteSavedSearch = async (req, res, next) => {
+  try {
+    const { searchId } = req.params;
+    if (!mongoose.isValidObjectId(searchId)) {
+      res.status(404).send("Saved search does not exist");
+      return;
+    }
+    const updated = await User.findOneAndUpdate(
+      { _id: req.userId },
+      { $pull: { savedSearches: { _id: searchId } } },
+      { new: true },
+    )
+      .select("savedSearches")
+      .lean();
+    if (!updated) {
+      res.status(404).send("User does not exist");
+      return;
+    }
+    res.status(200).json(updated.savedSearches ?? []);
   } catch (e) {
     next(e);
   }
@@ -960,6 +1159,115 @@ export const getUserRole = async (req, res, next) => {
       return;
     }
     res.send(user.role);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const listApiTokens = async (req, res, next) => {
+  try {
+    const tokens = await ApiToken.find({ userId: req.userId, revoked: false })
+      .select("name prefix created lastUsedAt")
+      .sort({ created: -1 })
+      .lean();
+    res.json(tokens);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const createApiToken = async (req, res, next) => {
+  try {
+    const name = String(req.body?.name ?? "").trim().slice(0, 100);
+    if (!name) {
+      res.status(400).send("A token name is required");
+      return;
+    }
+    const existing = await ApiToken.countDocuments({
+      userId: req.userId,
+      revoked: false,
+    });
+    if (existing >= 10) {
+      res.status(409).send("Too many API tokens (maximum 10)");
+      return;
+    }
+    const raw = `sq_${crypto.randomBytes(24).toString("hex")}`;
+    const tokenHash = crypto.createHash("sha256").update(raw).digest("hex");
+    const created = await new ApiToken({
+      userId: req.userId,
+      name,
+      tokenHash,
+      prefix: raw.slice(0, 11),
+      created: Date.now(),
+      revoked: false,
+    }).save();
+    res.status(200).json({
+      _id: created._id,
+      name,
+      prefix: created.prefix,
+      created: created.created,
+      token: raw,
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const revokeApiToken = async (req, res, next) => {
+  try {
+    const { tokenId } = req.params;
+    if (!mongoose.isValidObjectId(tokenId)) {
+      res.status(404).send("API token does not exist");
+      return;
+    }
+    const token = await ApiToken.findOneAndUpdate(
+      { _id: tokenId, userId: req.userId, revoked: false },
+      { $set: { revoked: true } },
+    ).lean();
+    if (!token) {
+      res.status(404).send("API token does not exist");
+      return;
+    }
+    res.sendStatus(200);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const rotateAnnounceUid = async (req, res, next) => {
+  try {
+    let uid = "";
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const candidate = crypto.randomBytes(16).toString("hex");
+      const collision = await User.findOne({ uid: candidate }).lean();
+      if (!collision) {
+        uid = candidate;
+        break;
+      }
+    }
+    if (!uid) {
+      res.status(500).send("Could not generate a new announce key");
+      return;
+    }
+    await User.findOneAndUpdate({ _id: req.userId }, { $set: { uid } });
+    res.status(200).json({ uid, announceUrl: getAnnounceUrl(uid) });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const signOutEverywhere = async (req, res, next) => {
+  try {
+    await User.findOneAndUpdate(
+      { _id: req.userId },
+      {
+        $set: {
+          pwdVersion: crypto.randomBytes(24).toString("hex"),
+          pwdVersionUpdatedAt: Date.now(),
+        },
+      },
+    );
+    res.sendStatus(200);
   } catch (e) {
     next(e);
   }
@@ -1068,6 +1376,7 @@ export const banUser = async (req, res, next) => {
         },
       },
     );
+    await logAudit(req.userId, "user.banned", req.params.username, banReason);
 
     res.sendStatus(200);
   } catch (e) {
@@ -1205,6 +1514,7 @@ export const unbanUser = async (req, res, next) => {
       { username: req.params.username },
       { $set: { banned: false } },
     );
+    await logAudit(req.userId, "user.unbanned", req.params.username);
 
     res.sendStatus(200);
   } catch (e) {
@@ -1242,6 +1552,118 @@ export const setUserRole = async (req, res, next) => {
     }
 
     await User.findOneAndUpdate({ _id: user._id }, { $set: { role } });
+    await logAudit(req.userId, "user.role", req.params.username, role);
+    res.sendStatus(200);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const issueWarning = async (req, res, next) => {
+  try {
+    if (!canModerate(req.userRole)) {
+      res.status(401).send("You do not have permission to warn users");
+      return;
+    }
+    const reason = String(req.body?.reason ?? "").trim().slice(0, 2000);
+    if (!reason) {
+      res.status(400).send("A reason is required");
+      return;
+    }
+    const user = await User.findOne({ username: req.params.username }).lean();
+    if (!user) {
+      res.status(404).send("User does not exist");
+      return;
+    }
+    if (user.username === "admin") {
+      res.status(403).send("The primary admin account cannot be warned");
+      return;
+    }
+    const warning = await new Warning({
+      userId: user._id,
+      reason,
+      issuedBy: req.userId,
+      created: Date.now(),
+      resolved: false,
+    }).save();
+    await pushNotification(user._id, {
+      type: "warning",
+      title: `You received a warning: ${reason.slice(0, 120)}`,
+      link: "/account",
+    });
+    await logAudit(req.userId, "user.warned", user.username, reason);
+    res.status(200).json(warning);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const resolveWarning = async (req, res, next) => {
+  try {
+    if (!canModerate(req.userRole)) {
+      res.status(401).send("You do not have permission to resolve warnings");
+      return;
+    }
+    const { warningId } = req.params;
+    if (!mongoose.isValidObjectId(warningId)) {
+      res.status(404).send("Warning does not exist");
+      return;
+    }
+    const warning = await Warning.findOneAndUpdate(
+      { _id: warningId },
+      { $set: { resolved: true, resolvedAt: Date.now() } },
+      { new: true },
+    ).lean();
+    if (!warning) {
+      res.status(404).send("Warning does not exist");
+      return;
+    }
+    const user = await User.findOne({ _id: warning.userId })
+      .select("username")
+      .lean();
+    await logAudit(
+      req.userId,
+      "user.warning-resolved",
+      user?.username ?? String(warning.userId),
+    );
+    res.sendStatus(200);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const getOwnWarnings = async (req, res, next) => {
+  try {
+    const warnings = await Warning.find({ userId: req.userId })
+      .sort({ created: -1 })
+      .lean();
+    res.json(warnings);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const appealWarning = async (req, res, next) => {
+  try {
+    const { warningId } = req.params;
+    if (!mongoose.isValidObjectId(warningId)) {
+      res.status(404).send("Warning does not exist");
+      return;
+    }
+    const text = String(req.body?.text ?? "").trim().slice(0, 2000);
+    if (!text) {
+      res.status(400).send("Appeal text is required");
+      return;
+    }
+    const warning = await Warning.findOneAndUpdate(
+      { _id: warningId, userId: req.userId, resolved: false },
+      { $set: { appeal: { text, created: Date.now() } } },
+      { new: true },
+    ).lean();
+    if (!warning) {
+      res.status(404).send("Warning does not exist or is already resolved");
+      return;
+    }
     res.sendStatus(200);
   } catch (e) {
     next(e);

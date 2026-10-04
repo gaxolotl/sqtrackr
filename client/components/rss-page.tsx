@@ -11,6 +11,8 @@ import {
   SignInRequired,
 } from "@/components/ui";
 import { useApiData } from "@/hooks/use-api-data";
+import { useTrackerConfig } from "@/hooks/use-tracker-config";
+import { FeatureDisabled } from "@/components/feature-disabled";
 import { apiFetch, apiOrigin } from "@/lib/api";
 
 type RssAccess = { token: string };
@@ -23,6 +25,7 @@ const feedReaders = [
 
 export function RssPage() {
   const { session } = useAuth();
+  const { config } = useTrackerConfig();
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -41,6 +44,10 @@ export function RssPage() {
         <SignInRequired />
       </main>
     );
+
+  if (!config.rssEnabled) {
+    return <FeatureDisabled name="RSS" />;
+  }
 
   async function copyFeed(reader?: string) {
     if (!feedUrl) return;

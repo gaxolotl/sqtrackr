@@ -9,6 +9,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@sqtrackr/plugin-collages": "workspace:*",
     "@sqtrackr/plugin-reseed-radar": "workspace:*",
     "@sqtrackr/plugin-sdk": "workspace:*",
     "lucide-react": "1.42.0",

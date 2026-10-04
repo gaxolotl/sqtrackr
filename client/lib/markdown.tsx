@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 const inlinePattern =
-  /(`[^`\n]+`)|(\*\*([^*\n]+)\*\*)|(\*([^*\n]+)\*)|(\[([^\]\n]+)\]\(([^)\s]+)\))/g;
+  /(`[^`\n]+`)|(\*\*([^*\n]+)\*\*)|(\*([^*\n]+)\*)|(!\[([^\]\n]*)\]\(([^)\s]+)\))|(\[([^\]\n]+)\]\(([^)\s]+)\))/g;
 
 function renderInline(value: string, depth = 0): ReactNode[] {
   if (depth > 6) return [value];
@@ -28,8 +28,20 @@ function renderInline(value: string, depth = 0): ReactNode[] {
     } else if (match[4]) {
       nodes.push(<em key={index}>{renderInline(match[5], depth + 1)}</em>);
     } else if (match[6]) {
-      const label = match[7];
-      const href = match[8];
+      const alt = match[7];
+      const src = match[8];
+      if (/^https?:\/\//i.test(src) || src.startsWith("/")) {
+        nodes.push(
+          // User-supplied remote images cannot use next/image (unknown hosts).
+          // eslint-disable-next-line @next/next/no-img-element
+          <img key={index} src={src} alt={alt} loading="lazy" />,
+        );
+      } else {
+        nodes.push(alt);
+      }
+    } else if (match[9]) {
+      const label = match[10];
+      const href = match[11];
       if (
         /^https?:\/\//i.test(href) ||
         href.startsWith("/") ||

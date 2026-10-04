@@ -286,6 +286,83 @@ input:focus-visible {
   position: relative;
 }
 
+.notifications-menu {
+  position: relative;
+}
+
+.notifications-trigger {
+  position: relative;
+}
+
+.notifications-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: inline-grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0 5px;
+  background: var(--accent);
+  border-radius: 999px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.notifications-popup {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  display: grid;
+  width: min(340px, 80vw);
+  padding: 5px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 14px 34px rgb(0 0 0 / 28%);
+}
+
+.notification-row {
+  display: grid;
+  gap: 2px;
+  padding: 9px 10px;
+  border-radius: 4px;
+}
+
+.notification-row:hover {
+  background: var(--accent-soft);
+}
+
+.notification-title {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.notification-row small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.notifications-empty {
+  padding: 12px 10px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.notification-view-all {
+  display: block;
+  padding: 9px 10px;
+  border-top: 1px solid var(--border);
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+}
+
 .language-trigger {
   display: inline-flex;
   height: 46px;
@@ -1579,6 +1656,38 @@ h1 {
   height: 22px;
 }
 
+.feed-card-link {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-width: 0;
+}
+
+.moderation-bulk-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.attachment-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.attachment-error {
+  color: #ff8675;
+  font-size: 13px;
+}
+
+.markdown-body img {
+  max-width: 100%;
+  border-radius: 6px;
+}
+
 .status-pill,
 .tag {
   padding: 5px 9px;
@@ -2689,6 +2798,16 @@ h1 {
 
   .metadata-none .metadata-poster-placeholder {
     height: 54px;
+  }
+
+  .feed-card {
+    flex-wrap: wrap;
+    gap: 12px;
+    min-height: 0;
+  }
+
+  .feed-card-link {
+    flex: 1 1 100%;
   }
 
   .media-metadata-card {
