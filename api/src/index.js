@@ -175,15 +175,18 @@ validateConfig(config)
       }),
     );
 
+    // Open CORS in dev (localhost/127.0.0.1/port mixing); restrict by
+    // SQ_BASE_URL in production only.
+    const corsOrigins = (process.env.SQ_BASE_URL ?? "")
+      .split(",")
+      .map((o) => o.trim())
+      .filter(Boolean);
     app.use(
-      cors({
-        origin: process.env.SQ_BASE_URL
-          ? process.env.SQ_BASE_URL.split(",")
-              .map((o) => o.trim())
-              .filter(Boolean)
-          : false,
-        credentials: false,
-      }),
+      cors(
+        process.env.NODE_ENV === "production" && corsOrigins.length
+          ? { origin: corsOrigins, credentials: false }
+          : {},
+      ),
     );
 
     // rate limit all API routes. if the request comes from Next SSR rather than
