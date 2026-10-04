@@ -878,6 +878,8 @@ h1 {
 
 .comment-body {
   margin: 7px 0 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .button-link,
@@ -2555,10 +2557,6 @@ h1 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .home-heading-row {
-    grid-template-columns: 1fr;
-  }
-
   .hero-search {
     margin-top: 30px;
   }
@@ -2602,7 +2600,7 @@ h1 {
     text-align: left;
   }
 
-  .torrent-table td::before {
+  .torrent-table td[data-label]::before {
     display: block;
     margin-bottom: 4px;
     color: var(--muted);
@@ -2747,14 +2745,13 @@ h1 {
     padding: 24px;
   }
 
-  .splash-actions,
-  .copy-field {
-    grid-template-columns: 1fr;
+  .splash-actions {
     flex-direction: column;
+    align-items: stretch;
   }
 
   .copy-field {
-    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .rss-primary-actions,
@@ -3365,6 +3362,7 @@ h1 {
 .forum-breadcrumbs {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 6px;
   color: var(--muted);
@@ -3480,6 +3478,56 @@ h1 {
 }
 
 .forum-post-content .markdown-body {
+  overflow-wrap: anywhere;
+}
+
+.markdown-body {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.markdown-body > :first-child {
+  margin-top: 0;
+}
+
+.markdown-body > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body p,
+.markdown-body li,
+.markdown-body blockquote,
+.markdown-body a {
+  overflow-wrap: anywhere;
+}
+
+.markdown-body pre {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0 0 18px;
+  padding: 15px 17px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.markdown-body pre code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow-wrap: normal;
+  white-space: pre;
+}
+
+.markdown-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.markdown-body :not(pre) > code {
+  padding: 2px 6px;
+  background: var(--surface-soft);
+  border-radius: 4px;
+  font-size: 0.88em;
   overflow-wrap: anywhere;
 }
 
@@ -4093,10 +4141,12 @@ h1 {
   max-width: var(--content-max-width);
   margin: -10px 0 28px;
   border-bottom: 1px solid var(--border);
+  overflow-x: auto;
 }
 
 .settings-tabs button {
   position: relative;
+  flex: 0 0 auto;
   min-height: 48px;
   padding: 0 2px;
   background: transparent;
@@ -4104,6 +4154,7 @@ h1 {
   color: var(--muted);
   cursor: pointer;
   font-weight: 750;
+  white-space: nowrap;
 }
 
 .settings-tabs button:hover,
@@ -4133,10 +4184,12 @@ h1 {
   max-width: var(--content-max-width);
   margin: 0 0 20px;
   border-bottom: 1px solid var(--border);
+  overflow-x: auto;
 }
 
 .tab-bar button {
   position: relative;
+  flex: 0 0 auto;
   min-height: 48px;
   padding: 0 2px;
   background: transparent;
@@ -4144,6 +4197,7 @@ h1 {
   color: var(--muted);
   cursor: pointer;
   font-weight: 750;
+  white-space: nowrap;
 }
 
 .tab-bar button:hover,
@@ -4809,17 +4863,20 @@ h1 {
   max-width: var(--content-max-width);
   margin: 0 0 20px;
   border-bottom: 1px solid var(--border);
+  overflow-x: auto;
 }
 
 .reseed-tabs a {
   position: relative;
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   min-height: 48px;
   padding: 0 2px;
   color: var(--muted);
   font-weight: 750;
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .reseed-tabs a:hover,
