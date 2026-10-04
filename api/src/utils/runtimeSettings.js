@@ -68,6 +68,7 @@ export const runtimeSettingsSchema = yup
       .required(),
     SQ_AVATAR_MAX_SIZE_KB: yup.number().integer().min(32).max(5120).required(),
     SQ_ALLOW_GIF_AVATARS: yup.boolean().required(),
+    SQ_ENABLE_RSS_READERS: yup.boolean().required(),
   })
   .strict()
   .noUnknown()
@@ -88,6 +89,7 @@ const booleanKeys = new Set([
   "SQ_SITE_WIDE_FREELEECH",
   "SQ_ALLOW_UNREGISTERED_VIEW",
   "SQ_ALLOW_GIF_AVATARS",
+  "SQ_ENABLE_RSS_READERS",
 ]);
 const numberKeys = new Set([
   "SQ_MINIMUM_RATIO",
@@ -119,6 +121,7 @@ const fallbackValues = {
   SQ_AVATAR_MAX_RESOLUTION: "512",
   SQ_AVATAR_MAX_SIZE_KB: "512",
   SQ_ALLOW_GIF_AVATARS: "true",
+  SQ_ENABLE_RSS_READERS: "true",
   SQ_SHOW_PAGE_IN_TITLE: "true",
   SQ_CONTENT_CENTERED: "false",
   SQ_CONTENT_MAX_WIDTH: "1040",

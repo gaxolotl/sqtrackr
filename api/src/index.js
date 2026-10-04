@@ -282,6 +282,7 @@ validateConfig(config)
         ),
         avatarMaxSizeKb: Number(process.env.SQ_AVATAR_MAX_SIZE_KB || 512),
         allowGifAvatars: process.env.SQ_ALLOW_GIF_AVATARS !== "false",
+        rssReadersEnabled: process.env.SQ_ENABLE_RSS_READERS !== "false",
         forumEnabled: process.env.SQ_ENABLE_FORUM !== "false",
         announcementsEnabled: process.env.SQ_ENABLE_ANNOUNCEMENTS !== "false",
         rssEnabled: process.env.SQ_ENABLE_RSS !== "false",

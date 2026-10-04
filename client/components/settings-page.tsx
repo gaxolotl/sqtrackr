@@ -53,6 +53,7 @@ type AdminSettings = {
   SQ_AVATAR_MAX_RESOLUTION: number;
   SQ_AVATAR_MAX_SIZE_KB: number;
   SQ_ALLOW_GIF_AVATARS: boolean;
+  SQ_ENABLE_RSS_READERS: boolean;
 };
 
 const numberFields = [
@@ -234,6 +235,7 @@ export function SettingsPage() {
         SQ_SITE_WIDE_FREELEECH: form.has("SQ_SITE_WIDE_FREELEECH"),
         SQ_ALLOW_UNREGISTERED_VIEW: form.has("SQ_ALLOW_UNREGISTERED_VIEW"),
         SQ_ALLOW_GIF_AVATARS: form.has("SQ_ALLOW_GIF_AVATARS"),
+        SQ_ENABLE_RSS_READERS: form.has("SQ_ENABLE_RSS_READERS"),
       };
       for (const key of numberFields) next[key] = Number(form.get(key));
       const saved = await apiFetch<AdminSettings>("/admin/settings", {
@@ -274,6 +276,7 @@ export function SettingsPage() {
         avatarMaxResolution: saved.SQ_AVATAR_MAX_RESOLUTION,
         avatarMaxSizeKb: saved.SQ_AVATAR_MAX_SIZE_KB,
         allowGifAvatars: saved.SQ_ALLOW_GIF_AVATARS,
+        rssReadersEnabled: saved.SQ_ENABLE_RSS_READERS,
       });
       setMessage("Site settings saved and applied.");
     } catch (requestError) {
@@ -931,6 +934,24 @@ export function SettingsPage() {
                     defaultChecked={settings.data.SQ_ALLOW_GIF_AVATARS}
                   />{" "}
                   Allow animated GIF uploads
+                </label>
+              </div>
+            </section>
+
+            <section className="account-section">
+              <h2>RSS</h2>
+              <p>
+                Control the shortcuts that help users add their private feed
+                to a feed reader.
+              </p>
+              <div className="settings-checks">
+                <label>
+                  <input
+                    name="SQ_ENABLE_RSS_READERS"
+                    type="checkbox"
+                    defaultChecked={settings.data.SQ_ENABLE_RSS_READERS}
+                  />{" "}
+                  Show feed reader shortcuts
                 </label>
               </div>
             </section>

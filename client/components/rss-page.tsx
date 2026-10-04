@@ -18,9 +18,9 @@ import { apiFetch, apiOrigin } from "@/lib/api";
 type RssAccess = { token: string };
 
 const feedReaders = [
-  { name: "Feedly", url: "https://feedly.com/i/discover" },
-  { name: "Inoreader", url: "https://www.inoreader.com/" },
   { name: "NewsBlur", url: "https://www.newsblur.com/" },
+  { name: "FreshRSS", url: "https://freshrss.org/" },
+  { name: "Miniflux", url: "https://miniflux.app/" },
 ];
 
 export function RssPage() {
@@ -142,34 +142,36 @@ export function RssPage() {
               className="primary-button button-link"
               href={feedUrl}
               target="_blank"
-              rel="noreferrer"
+              rel="noreferrer noopener"
             >
               <ExternalLink aria-hidden="true" /> Open feed
             </a>
           </div>
-          <section className="rss-reader-section">
-            <div>
-              <h2>Add to a feed reader</h2>
-              <p>
-                Choose a reader to copy the private URL and open its add-feed
-                screen.
-              </p>
-            </div>
-            <div className="rss-reader-actions">
-              {feedReaders.map((reader) => (
-                <a
-                  className="secondary-button button-link"
-                  href={reader.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={() => void copyFeed(reader.name)}
-                  key={reader.name}
-                >
-                  <ExternalLink aria-hidden="true" /> {reader.name}
-                </a>
-              ))}
-            </div>
-          </section>
+          {config.rssReadersEnabled && (
+            <section className="rss-reader-section">
+              <div>
+                <h2>Add to a feed reader</h2>
+                <p>
+                  Choose an open-source reader to copy the private URL, then
+                  add it in the reader.
+                </p>
+              </div>
+              <div className="rss-reader-actions">
+                {feedReaders.map((reader) => (
+                  <a
+                    className="secondary-button button-link"
+                    href={reader.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    onClick={() => void copyFeed(reader.name)}
+                    key={reader.name}
+                  >
+                    <ExternalLink aria-hidden="true" /> {reader.name}
+                  </a>
+                ))}
+              </div>
+            </section>
+          )}
           <section className="rss-token-section">
             <ShieldAlert aria-hidden="true" />
             <div>

@@ -338,6 +338,7 @@ export type TrackerConfig = {
   avatarMaxResolution: number;
   avatarMaxSizeKb: number;
   allowGifAvatars: boolean;
+  rssReadersEnabled: boolean;
   forumEnabled: boolean;
   announcementsEnabled: boolean;
   rssEnabled: boolean;

@@ -123,6 +123,10 @@ module.exports = {
     SQ_ENABLE_ANNOUNCEMENTS: true,
     SQ_ENABLE_RSS: true,
 
+    // Show the "Add to a feed reader" shortcuts on the RSS page.
+    // Also editable at runtime in site settings.
+    SQ_ENABLE_RSS_READERS: true,
+
     // The URL of your tracker site.
     // For local development, this should be `http://127.0.0.1:3000`.
     SQ_BASE_URL: "https://sqtracker.dev",
