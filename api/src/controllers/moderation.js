@@ -23,9 +23,12 @@ export const createReport = async (req, res, next) => {
         { trim: false },
       );
       if (reason === null) return;
-      const torrent = await Torrent.findOne({
-        infoHash: req.params.infoHash,
-      }).lean();
+      const torrent = await Torrent.findOne(
+        {
+          infoHash: req.params.infoHash,
+        },
+        { _id: 1 },
+      ).lean();
 
       if (!torrent) {
         res.status(404).send("Torrent with that info hash does not exist");
@@ -61,12 +64,18 @@ export const fetchReport = async (req, res, next) => {
       return;
     }
 
-    report.reportedBy = await User.findOne({ _id: report.reportedBy }).select(
-      "username created",
-    );
-    report.torrent = await Torrent.findOne({ _id: report.torrent }).select(
-      "name description infoHash created",
-    );
+    const [reportedBy, torrent] = await Promise.all([
+      User.findOne(
+        { _id: report.reportedBy },
+        { username: 1, created: 1 },
+      ).lean(),
+      Torrent.findOne(
+        { _id: report.torrent },
+        { name: 1, description: 1, infoHash: 1, created: 1 },
+      ).lean(),
+    ]);
+    report.reportedBy = reportedBy;
+    report.torrent = torrent;
 
     res.json(report);
   } catch (e) {
@@ -84,7 +93,7 @@ const listReports = (solved) => async (req, res, next) => {
     }
 
     let { page } = req.params;
-    page = parseInt(page) || 0;
+    page = Math.max(0, parseInt(page, 10) || 0);
     const query =
       typeof req.query.q === "string" ? req.query.q.slice(0, 100) : "";
     const reports = await Report.aggregate([

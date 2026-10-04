@@ -55,6 +55,13 @@ import Torrent from "./schema/torrent.js";
 import TorrentSubmission from "./schema/torrentSubmission.js";
 import Conversation from "./schema/conversation.js";
 import Message from "./schema/message.js";
+import User from "./schema/user.js";
+import Progress from "./schema/progress.js";
+import Comment from "./schema/comment.js";
+import Request from "./schema/request.js";
+import Announcement from "./schema/announcement.js";
+import Report from "./schema/report.js";
+import Wiki from "./schema/wiki.js";
 
 mongoose.set("strictQuery", true);
 
@@ -71,7 +78,6 @@ validateConfig(config)
       Sentry.setContext("deployment", {
         name: process.env.SQ_SITE_NAME,
         url: process.env.SQ_BASE_URL,
-        adminEmail: process.env.SQ_ADMIN_EMAIL,
       });
     }
 
@@ -105,6 +111,13 @@ validateConfig(config)
             TorrentSubmission.init(),
             Conversation.init(),
             Message.init(),
+            User.init(),
+            Progress.init(),
+            Comment.init(),
+            Request.init(),
+            Announcement.init(),
+            Report.init(),
+            Wiki.init(),
           ]);
           await loadRuntimeSettings();
           await createAdminUser(mail);
@@ -119,6 +132,12 @@ validateConfig(config)
     const app = express();
     app.set("trust proxy", true);
     app.disable("x-powered-by");
+    app.use((req, res, next) => {
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("X-Frame-Options", "SAMEORIGIN");
+      res.setHeader("Referrer-Policy", "no-referrer");
+      next();
+    });
 
     const colorizeStatus = (status) => {
       if (!status) return "?";
@@ -147,7 +166,16 @@ validateConfig(config)
       }),
     );
 
-    app.use(cors());
+    app.use(
+      cors({
+        origin: process.env.SQ_BASE_URL
+          ? process.env.SQ_BASE_URL.split(",")
+              .map((o) => o.trim())
+              .filter(Boolean)
+          : false,
+        credentials: false,
+      }),
+    );
 
     // rate limit all API routes. if the request comes from Next SSR rather than
     // the client browser, we need to make use of the forwarded IP rather than

@@ -44,9 +44,12 @@ export const rssFeed = (tracker) => async (req, res, next) => {
   try {
     let user;
     if (typeof token === "string" && token) {
-      user = await User.findOne({ rssToken: token });
+      user = await User.findOne(
+        { rssToken: token },
+        { uid: 1, banned: 1 },
+      ).lean();
     } else if (username && password) {
-      user = await User.findOne({ username });
+      user = await User.findOne({ username }, { password: 1, uid: 1, banned: 1 }).lean();
       if (user && !(await bcrypt.compare(password, user.password))) user = null;
     }
 
@@ -57,6 +60,7 @@ export const rssFeed = (tracker) => async (req, res, next) => {
 
     const searchQuery =
       typeof query === "string" ? escapeRegex(query.slice(0, 200)) : "";
+    const rssProjection = { name: 1, description: 1, infoHash: 1, size: 1 };
     let torrents;
     if (query) {
       torrents = await Torrent.find(
@@ -68,11 +72,11 @@ export const rssFeed = (tracker) => async (req, res, next) => {
             },
           ],
         },
-        null,
+        rssProjection,
         { sort: { created: -1 }, limit: 100 },
       ).lean();
     } else {
-      torrents = await Torrent.find({}, null, {
+      torrents = await Torrent.find({}, rssProjection, {
         sort: { created: -1 },
         limit: 100,
       }).lean();

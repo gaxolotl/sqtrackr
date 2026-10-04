@@ -50,7 +50,7 @@ export const getRequests = async (req, res, next) => {
   const pageSize = 25;
   try {
     let { page } = req.params;
-    page = parseInt(page) || 0;
+    page = Math.max(0, parseInt(page, 10) || 0);
 
     const requests = await Request.aggregate([
       {
@@ -209,6 +209,11 @@ export const deleteRequest = async (req, res, next) => {
       index: parseInt(req.params.index),
     }).lean();
 
+    if (!request) {
+      res.status(404).send("Request could not be found");
+      return;
+    }
+
     if (req.userId.toString() !== request.createdBy.toString()) {
       res.status(401).send("You do not have permission to delete that request");
       return;
@@ -275,6 +280,11 @@ export const addCandidate = async (req, res, next) => {
         _id: requestId,
       }).lean();
 
+      if (!request) {
+        res.status(404).send("Request does not exist");
+        return;
+      }
+
       const torrent = await Torrent.findOne(
         {
           infoHash,
@@ -288,7 +298,7 @@ export const addCandidate = async (req, res, next) => {
       }
 
       if (
-        request.candidates
+        (request.candidates ?? [])
           .map((c) => c.torrent?.toString())
           .includes(torrent._id.toString())
       ) {
@@ -334,6 +344,11 @@ export const acceptCandidate = async (req, res, next) => {
         _id: requestId,
       }).lean();
 
+      if (!request) {
+        res.status(404).send("Request does not exist");
+        return;
+      }
+
       if (req.userId.toString() !== request.createdBy.toString()) {
         res
           .status(401)
@@ -345,7 +360,12 @@ export const acceptCandidate = async (req, res, next) => {
         infoHash,
       }).lean();
 
-      const candidate = request.candidates.find(
+      if (!torrent) {
+        res.status(404).send("Torrent does not exist");
+        return;
+      }
+
+      const candidate = (request.candidates ?? []).find(
         (c) => c.torrent?.toString() === torrent._id.toString(),
       );
 

@@ -501,6 +501,14 @@ export const addParticipants = async (req, res, next) => {
   }
 
   try {
+    const membership = await Conversation.findOne(
+      { _id: conversationId, participants: req.userId },
+      { _id: 1, createdBy: 1, participants: 1, system: 1, readOnly: 1 },
+    ).lean();
+    if (!membership) {
+      res.status(404).send("Conversation does not exist");
+      return;
+    }
     const conversation = await Conversation.findById(conversationId);
     if (!conversation) {
       res.status(404).send("Conversation does not exist");

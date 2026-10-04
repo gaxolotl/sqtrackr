@@ -15,12 +15,23 @@ export const hexToBinary = (h) => Buffer.from(h, "hex").toString("binary");
 const handleAnnounce = async (req, res) => {
   const announceUid = req.originalUrl.split("?")[0].split("/")[2];
 
-  const user = await User.findOne({ uid: announceUid }).lean();
+  const user = await User.findOne(
+    { uid: announceUid },
+    { emailVerified: 1, banned: 1 },
+  ).lean();
 
   // if the uid does not match a registered user, deny announce
   if (!user) {
     const response = bencode.encode({
       "failure reason": "Announce denied: you are not registered.",
+    });
+    res.send(response);
+    return;
+  }
+
+  if (user.banned) {
+    const response = bencode.encode({
+      "failure reason": "Announce denied: you are banned.",
     });
     res.send(response);
     return;
@@ -40,7 +51,10 @@ const handleAnnounce = async (req, res) => {
 
   const infoHash = binaryToHex(params.info_hash);
 
-  const torrent = await Torrent.findOne({ infoHash }).lean();
+  const torrent = await Torrent.findOne(
+    { infoHash },
+    { _id: 1, freeleech: 1 },
+  ).lean();
 
   // if torrent info hash is not in the database, deny announce
   if (!torrent) {
@@ -60,7 +74,7 @@ const handleAnnounce = async (req, res) => {
     Number(process.env.SQ_MINIMUM_RATIO) !== -1 &&
     ratio < Number(process.env.SQ_MINIMUM_RATIO) &&
     ratio !== -1 &&
-    Number(params.left > 0)
+    Number(params.left) > 0
   ) {
     const response = bencode.encode({
       "failure reason": `Announce denied: Ratio is below minimum threshold ${process.env.SQ_MINIMUM_RATIO}.`,
@@ -75,7 +89,7 @@ const handleAnnounce = async (req, res) => {
   if (
     Number(process.env.SQ_MAXIMUM_HIT_N_RUNS) !== -1 &&
     hitnruns >= Number(process.env.SQ_MAXIMUM_HIT_N_RUNS) &&
-    Number(params.left > 0)
+    Number(params.left) > 0
   ) {
     const response = bencode.encode({
       "failure reason": `Announce denied: You have committed ${process.env.SQ_MAXIMUM_HIT_N_RUNS} or more hit'n'runs.`,

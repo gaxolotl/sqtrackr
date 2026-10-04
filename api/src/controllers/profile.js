@@ -209,9 +209,16 @@ export const serveAvatar = async (req, res, next) => {
     const avatar = Buffer.isBuffer(user.avatar.data)
       ? user.avatar.data
       : Buffer.from(user.avatar.data.buffer ?? user.avatar.data);
+    const version = user.avatarUpdated ? String(user.avatarUpdated) : "0";
+    const etag = `W/"${version}-${avatar.length}"`;
     res.setHeader("Content-Type", "image/webp");
     res.setHeader("Cache-Control", "public, max-age=86400");
     res.setHeader("Content-Length", avatar.length);
+    res.setHeader("ETag", etag);
+    if (req.headers["if-none-match"] === etag) {
+      res.sendStatus(304);
+      return;
+    }
     res.end(avatar);
   } catch (error) {
     next(error);

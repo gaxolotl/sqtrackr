@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import slugify from "slugify";
 import Announcement from "../schema/announcement.js";
 import Comment from "../schema/comment.js";
@@ -146,9 +147,9 @@ export const getAnnouncements = async (req, res, next) => {
   try {
     let { count } = req.query;
     let { page } = req.params;
-    page = parseInt(page) || 0;
-    count = parseInt(count) || 25;
-    count = Math.min(count, 100);
+    page = Math.max(0, parseInt(page, 10) || 0);
+    count = parseInt(count, 10) || 25;
+    count = Math.min(Math.max(count, 1), 100);
 
     const announcements = await Announcement.aggregate([
       {
@@ -300,6 +301,16 @@ export const deleteAnnouncement = async (req, res, next) => {
 
 export const pinAnnouncement = async (req, res, next) => {
   try {
+    if (req.userRole !== "admin") {
+      res
+        .status(401)
+        .send("You do not have permission to pin an announcement");
+      return;
+    }
+    if (!mongoose.isValidObjectId(req.params.announcementId)) {
+      res.status(400).send("Invalid announcement ID");
+      return;
+    }
     await Announcement.findOneAndUpdate(
       { _id: req.params.announcementId },
       { $set: { pinned: req.params.action === "pin" } }
