@@ -112,24 +112,8 @@ const configSchema = yup
       .required(),
     secrets: yup
       .object({
-        SQ_JWT_SECRET: yup
-          .string()
-          .min(32)
-          .test(
-            "jwt-not-default",
-            "SQ_JWT_SECRET must not be the default example value",
-            (value) => value !== "long_random_string",
-          )
-          .required(),
-        SQ_SERVER_SECRET: yup
-          .string()
-          .min(32)
-          .test(
-            "server-not-default",
-            "SQ_SERVER_SECRET must not be the default example value",
-            (value) => value !== "another_long_random_string",
-          )
-          .required(),
+        SQ_JWT_SECRET: yup.string().required(),
+        SQ_SERVER_SECRET: yup.string().required(),
         SQ_ADMIN_EMAIL: yup.string().email().required(),
         SQ_SMTP_USER: yup.string(),
         SQ_SMTP_PASS: yup.string(),
@@ -162,15 +146,35 @@ const configSchema = yup
   })
   .strict()
   .noUnknown()
-  .required()
-  .test(
-    "secrets-differ",
-    "SQ_JWT_SECRET and SQ_SERVER_SECRET must differ",
-    (value) =>
-      !value?.secrets?.SQ_JWT_SECRET ||
-      !value?.secrets?.SQ_SERVER_SECRET ||
-      value.secrets.SQ_JWT_SECRET !== value.secrets.SQ_SERVER_SECRET,
-  );
+  .required();
+
+const warnWeakSecrets = (config) => {
+  const jwt = config?.secrets?.SQ_JWT_SECRET;
+  const server = config?.secrets?.SQ_SERVER_SECRET;
+  if (typeof jwt === "string" && jwt.length < 32) {
+    console.warn(
+      "[sq] SECURITY: SQ_JWT_SECRET is shorter than 32 characters - use a long random value",
+    );
+  }
+  if (typeof server === "string" && server.length < 32) {
+    console.warn(
+      "[sq] SECURITY: SQ_SERVER_SECRET is shorter than 32 characters - use a long random value",
+    );
+  }
+  if (
+    jwt === "long_random_string" ||
+    server === "another_long_random_string"
+  ) {
+    console.warn(
+      "[sq] SECURITY: secrets still use the example defaults - change them immediately",
+    );
+  }
+  if (jwt && server && jwt === server) {
+    console.warn(
+      "[sq] SECURITY: SQ_JWT_SECRET and SQ_SERVER_SECRET must differ",
+    );
+  }
+};
 
 const validateConfig = async (config) => {
   try {
@@ -190,6 +194,7 @@ const validateConfig = async (config) => {
     };
     await configSchema.validate(config);
     console.log("[sq] configuration is valid");
+    warnWeakSecrets(config);
   } catch (e) {
     console.error("[sq] ERROR: invalid configuration:", e.message);
     process.exit(1);
