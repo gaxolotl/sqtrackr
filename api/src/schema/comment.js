@@ -8,4 +8,7 @@ const Comment = new mongoose.Schema({
   created: Number,
 });
 
+Comment.index({ parentId: 1, type: 1, created: -1 });
+Comment.index({ userId: 1, created: -1 });
+
 export default mongoose.model("comment", Comment);

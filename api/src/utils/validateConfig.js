@@ -106,8 +106,24 @@ const configSchema = yup
       .required(),
     secrets: yup
       .object({
-        SQ_JWT_SECRET: yup.string().required(),
-        SQ_SERVER_SECRET: yup.string().required(),
+        SQ_JWT_SECRET: yup
+          .string()
+          .min(32)
+          .test(
+            "jwt-not-default",
+            "SQ_JWT_SECRET must not be the default example value",
+            (value) => value !== "long_random_string",
+          )
+          .required(),
+        SQ_SERVER_SECRET: yup
+          .string()
+          .min(32)
+          .test(
+            "server-not-default",
+            "SQ_SERVER_SECRET must not be the default example value",
+            (value) => value !== "another_long_random_string",
+          )
+          .required(),
         SQ_ADMIN_EMAIL: yup.string().email().required(),
         SQ_SMTP_USER: yup.string(),
         SQ_SMTP_PASS: yup.string(),
@@ -140,7 +156,15 @@ const configSchema = yup
   })
   .strict()
   .noUnknown()
-  .required();
+  .required()
+  .test(
+    "secrets-differ",
+    "SQ_JWT_SECRET and SQ_SERVER_SECRET must differ",
+    (value) =>
+      !value?.secrets?.SQ_JWT_SECRET ||
+      !value?.secrets?.SQ_SERVER_SECRET ||
+      value.secrets.SQ_JWT_SECRET !== value.secrets.SQ_SERVER_SECRET,
+  );
 
 const validateConfig = async (config) => {
   try {

@@ -11,4 +11,7 @@ const Announcement = new mongoose.Schema({
   updated: Number,
 });
 
+Announcement.index({ slug: 1 });
+Announcement.index({ pinned: 1, created: -1 });
+
 export default mongoose.model("announcement", Announcement);

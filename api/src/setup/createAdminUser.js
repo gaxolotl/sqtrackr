@@ -54,6 +54,20 @@ const createAdminUser = async (mail) => {
     }
 
     console.log("[sq] created initial admin user");
+    console.warn(
+      "[sq] SECURITY: initial admin uses default password 'admin' - change it immediately",
+    );
+  } else {
+    try {
+      const full = await User.findOne({ username: "admin" }).lean();
+      if (full && (await bcrypt.compare("admin", full.password))) {
+        console.warn(
+          "[sq] SECURITY: admin user still uses default password 'admin' - change it immediately",
+        );
+      }
+    } catch {
+      // ignore - startup should not fail on warning check
+    }
   }
 };
 

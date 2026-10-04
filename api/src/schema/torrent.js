@@ -58,4 +58,11 @@ const Torrent = new mongoose.Schema({
 
 Torrent.plugin(fuzzySearch, { fields: ["name"] });
 
+Torrent.index({ infoHash: 1 });
+Torrent.index({ created: -1 });
+Torrent.index({ type: 1 });
+Torrent.index({ tags: 1 });
+Torrent.index({ uploadedBy: 1 });
+Torrent.index({ group: 1 });
+
 export default mongoose.model("torrent", Torrent);

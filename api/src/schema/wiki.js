@@ -10,4 +10,6 @@ const Wiki = new mongoose.Schema({
   updated: Number,
 });
 
+Wiki.index({ slug: 1 });
+
 export default mongoose.model("wiki", Wiki);

@@ -18,4 +18,7 @@ const Request = new mongoose.Schema({
   },
 });
 
+Request.index({ index: 1 });
+Request.index({ created: -1 });
+
 export default mongoose.model("request", Request);

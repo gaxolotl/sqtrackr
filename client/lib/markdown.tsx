@@ -44,7 +44,7 @@ function renderInline(value: string, depth = 0): ReactNode[] {
                 ? undefined
                 : "_blank"
             }
-            rel="noreferrer"
+            rel="noreferrer noopener"
           >
             {label}
           </a>,

@@ -10,4 +10,6 @@ const Report = new mongoose.Schema({
   created: Number,
 });
 
+Report.index({ solved: 1, created: -1 });
+
 export default mongoose.model("report", Report);
