@@ -127,6 +127,18 @@ module.exports = {
     // Also editable at runtime in site settings.
     SQ_ENABLE_RSS_READERS: true,
 
+    // Button order for the torrent actions row, as an array of action keys.
+    // Built-ins: upvote, downvote, bookmark, freeleech, delete.
+    // Plugin buttons use "plugin:<pluginId>" keys and are appended when missing.
+    // Also editable at runtime in site settings.
+    SQ_TORRENT_ACTION_ORDER: [
+      "upvote",
+      "downvote",
+      "bookmark",
+      "freeleech",
+      "delete",
+    ],
+
     // The URL of your tracker site.
     // For local development, this should be `http://127.0.0.1:3000`.
     SQ_BASE_URL: "https://sqtracker.dev",

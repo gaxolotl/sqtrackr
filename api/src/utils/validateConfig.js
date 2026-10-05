@@ -75,6 +75,7 @@ const configSchema = yup
         SQ_AVATAR_MAX_SIZE_KB: yup.number().integer().min(32).max(5120),
         SQ_ALLOW_GIF_AVATARS: yup.boolean(),
         SQ_ENABLE_RSS_READERS: yup.boolean(),
+        SQ_TORRENT_ACTION_ORDER: yup.array().of(yup.string()),
         SQ_ENABLE_FORUM: yup.boolean(),
         SQ_ENABLE_ANNOUNCEMENTS: yup.boolean(),
         SQ_ENABLE_RSS: yup.boolean(),

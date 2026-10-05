@@ -1295,6 +1295,15 @@ h1 {
   gap: 8px;
 }
 
+.comment-form .form-actions {
+  align-items: center;
+  gap: 10px;
+}
+
+.comment-form .form-actions .compact-button {
+  min-height: 46px;
+}
+
 .check-field {
   display: inline-flex;
   align-items: center;
@@ -2078,6 +2087,12 @@ h1 {
   align-items: end;
   max-width: var(--content-max-width);
   margin-top: 22px;
+}
+
+.inline-form .secondary-button,
+.inline-form .primary-button {
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 
 .candidate-actions {

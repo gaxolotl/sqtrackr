@@ -69,6 +69,11 @@ export const runtimeSettingsSchema = yup
     SQ_AVATAR_MAX_SIZE_KB: yup.number().integer().min(32).max(5120).required(),
     SQ_ALLOW_GIF_AVATARS: yup.boolean().required(),
     SQ_ENABLE_RSS_READERS: yup.boolean().required(),
+    SQ_TORRENT_ACTION_ORDER: yup
+      .array()
+      .of(yup.string().trim().min(1).max(64))
+      .max(50)
+      .required(),
   })
   .strict()
   .noUnknown()
@@ -76,6 +81,7 @@ export const runtimeSettingsSchema = yup
 
 const jsonKeys = new Set([
   "SQ_TORRENT_CATEGORIES",
+  "SQ_TORRENT_ACTION_ORDER",
   "SQ_EXTENSION_BLACKLIST",
   "SQ_CLIENT_BLACKLIST",
   "SQ_CUSTOM_THEME",
@@ -137,6 +143,8 @@ const fallbackValues = {
   SQ_TORRENT_TAGS_MAX_LENGTH: "500",
   SQ_TORRENT_FILE_MAX_SIZE_KB: "1024",
   SQ_TORRENT_PREMODERATION: "false",
+  SQ_TORRENT_ACTION_ORDER:
+    '["upvote","downvote","bookmark","freeleech","delete"]',
 };
 
 const parseEnvironmentValue = (key, value) => {

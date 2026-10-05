@@ -16,10 +16,10 @@ import {
   ThumbsUp,
   Trash2,
 } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { FormEvent, Fragment, useState, type ReactNode } from "react";
 import { useAuth } from "@/components/auth-context";
 import { CommentThread } from "@/components/comment-thread";
-import { PluginSlot } from "@/components/plugin-host";
+import { PluginBoundary, PluginSlot, usePluginHost } from "@/components/plugin-host";
 import {
   ActionMessage,
   ApiState,
@@ -33,7 +33,7 @@ import { apiFetch, apiOrigin } from "@/lib/api";
 import { formatBytes, formatDateTime } from "@/lib/format";
 import { useTrackerConfig } from "@/hooks/use-tracker-config";
 import type { Torrent } from "@/lib/types";
-import { torrentDisplayName } from "@/lib/torrents";
+import { sortTorrentActions, torrentDisplayName } from "@/lib/torrents";
 import { Markdown } from "@/lib/markdown";
 
 function countVotes(votes: Torrent["upvotes"]) {
@@ -115,6 +115,7 @@ export function TorrentDetail({ infoHash }: { infoHash: string }) {
   const { session } = useAuth();
   const router = useRouter();
   const { config } = useTrackerConfig();
+  const pluginHost = usePluginHost();
   const { data, error, loading, reload } = useApiData<Torrent>(
     session ? `/torrent/info/${infoHash}` : null,
   );
@@ -196,6 +197,134 @@ export function TorrentDetail({ infoHash }: { infoHash: string }) {
         reload,
       }
     : null;
+
+  const orderedTorrentActions = (() => {
+    if (!data || !pluginContext) return [];
+    const actions: Array<{ key: string; node: ReactNode }> = [
+      {
+        key: "upvote",
+        node: (
+          <button
+            className="icon-action"
+            type="button"
+            onClick={() =>
+              act(`/torrent/vote/${data.infoHash}/up`, "Vote saved.")
+            }
+          >
+            <ThumbsUp aria-hidden="true" /> {countVotes(data.upvotes)}
+          </button>
+        ),
+      },
+      {
+        key: "downvote",
+        node: (
+          <button
+            className="icon-action"
+            type="button"
+            onClick={() =>
+              act(`/torrent/vote/${data.infoHash}/down`, "Vote saved.")
+            }
+          >
+            <ThumbsDown aria-hidden="true" /> {countVotes(data.downvotes)}
+          </button>
+        ),
+      },
+      {
+        key: "bookmark",
+        node: (
+          <button
+            className="icon-action"
+            type="button"
+            onClick={() =>
+              act(`/torrent/bookmark/${data.infoHash}`, "Bookmark updated.")
+            }
+          >
+            <Bookmark aria-hidden="true" />{" "}
+            {data.fetchedBy?.bookmarked ? "Bookmarked" : "Bookmark"}
+          </button>
+        ),
+      },
+    ];
+    if (session.role === "admin") {
+      actions.push({
+        key: "freeleech",
+        node: (
+          <button
+            className="icon-action"
+            type="button"
+            onClick={() =>
+              act(
+                `/torrent/toggle-freeleech/${data.infoHash}`,
+                "Freeleech updated.",
+              )
+            }
+          >
+            <Sparkles aria-hidden="true" />{" "}
+            {data.freeleech ? "Remove freeleech" : "Set freeleech"}
+          </button>
+        ),
+      });
+    }
+    if (canManage) {
+      actions.push({
+        key: "delete",
+        node: (
+          <button
+            className="icon-action danger-action"
+            type="button"
+            onClick={removeTorrent}
+          >
+            <Trash2 aria-hidden="true" /> Delete
+          </button>
+        ),
+      });
+    }
+    const slotItems = pluginHost.slots("torrent.actions");
+    const pluginGroups = new Map<
+      string,
+      {
+        pluginId: string;
+        pluginName: string;
+        items: Array<(typeof slotItems)[number]>;
+      }
+    >();
+    for (const item of slotItems) {
+      const group = pluginGroups.get(item.pluginId);
+      if (group) {
+        group.items.push(item);
+      } else {
+        pluginGroups.set(item.pluginId, {
+          pluginId: item.pluginId,
+          pluginName: item.pluginName,
+          items: [item],
+        });
+      }
+    }
+    for (const group of pluginGroups.values()) {
+      actions.push({
+        key: `plugin:${group.pluginId}`,
+        node: (
+          <>
+            {group.items.map(
+              ({ contribution, pluginId, pluginName }, index) => {
+                const SlotComponent = contribution.component;
+                return (
+                  <PluginBoundary
+                    key={`${pluginId}:torrent.actions:${index}`}
+                    pluginId={pluginId}
+                    pluginName={pluginName}
+                  >
+                    <SlotComponent context={pluginContext} />
+                  </PluginBoundary>
+                );
+              },
+            )}
+          </>
+        ),
+      });
+    }
+    return sortTorrentActions(actions, config.torrentActionOrder);
+  })();
 
   return (
     <main className="page detail-page">
@@ -403,59 +532,9 @@ export function TorrentDetail({ infoHash }: { infoHash: string }) {
             ) : null}
 
             <div className="torrent-actions">
-              <button
-                className="icon-action"
-                type="button"
-                onClick={() =>
-                  act(`/torrent/vote/${data.infoHash}/up`, "Vote saved.")
-                }
-              >
-                <ThumbsUp aria-hidden="true" /> {countVotes(data.upvotes)}
-              </button>
-              <button
-                className="icon-action"
-                type="button"
-                onClick={() =>
-                  act(`/torrent/vote/${data.infoHash}/down`, "Vote saved.")
-                }
-              >
-                <ThumbsDown aria-hidden="true" /> {countVotes(data.downvotes)}
-              </button>
-              <button
-                className="icon-action"
-                type="button"
-                onClick={() =>
-                  act(`/torrent/bookmark/${data.infoHash}`, "Bookmark updated.")
-                }
-              >
-                <Bookmark aria-hidden="true" />{" "}
-                {data.fetchedBy?.bookmarked ? "Bookmarked" : "Bookmark"}
-              </button>
-              {session.role === "admin" ? (
-                <button
-                  className="icon-action"
-                  type="button"
-                  onClick={() =>
-                    act(
-                      `/torrent/toggle-freeleech/${data.infoHash}`,
-                      "Freeleech updated.",
-                    )
-                  }
-                >
-                  <Sparkles aria-hidden="true" />{" "}
-                  {data.freeleech ? "Remove freeleech" : "Set freeleech"}
-                </button>
-              ) : null}
-              {canManage ? (
-                <button
-                  className="icon-action danger-action"
-                  type="button"
-                  onClick={removeTorrent}
-                >
-                  <Trash2 aria-hidden="true" /> Delete
-                </button>
-              ) : null}
-              <PluginSlot name="torrent.actions" context={pluginContext} />
+              {orderedTorrentActions.map((action) => (
+                <Fragment key={action.key}>{action.node}</Fragment>
+              ))}
             </div>
             <ActionMessage message={message} error={actionError} />
 

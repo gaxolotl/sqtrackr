@@ -37,6 +37,7 @@ export const FALLBACK_TRACKER_CONFIG: TrackerConfig = {
   avatarMaxSizeKb: 512,
   allowGifAvatars: true,
   rssReadersEnabled: true,
+  torrentActionOrder: ["upvote", "downvote", "bookmark", "freeleech", "delete"],
   forumEnabled: true,
   announcementsEnabled: true,
   rssEnabled: true,

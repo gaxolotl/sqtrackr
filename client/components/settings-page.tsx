@@ -13,7 +13,13 @@ import {
 } from "@/components/ui";
 import { useApiData } from "@/hooks/use-api-data";
 import { useTrackerConfig } from "@/hooks/use-tracker-config";
+import { usePluginHost } from "@/components/plugin-host";
 import { apiFetch } from "@/lib/api";
+import {
+  mergeTorrentActionOrder,
+  moveActionKey,
+  torrentActionLabel,
+} from "@/lib/torrents";
 
 type AdminSettings = {
   SQ_SITE_NAME: string;
@@ -54,6 +60,7 @@ type AdminSettings = {
   SQ_AVATAR_MAX_SIZE_KB: number;
   SQ_ALLOW_GIF_AVATARS: boolean;
   SQ_ENABLE_RSS_READERS: boolean;
+  SQ_TORRENT_ACTION_ORDER: string[];
 };
 
 const numberFields = [
@@ -120,6 +127,18 @@ export function SettingsPage() {
   const [newExtension, setNewExtension] = useState("");
   const [blockedClients, setBlockedClients] = useState<string[]>([]);
   const [newClient, setNewClient] = useState("");
+  const [actionOrder, setActionOrder] = useState<string[]>([]);
+  const pluginHost = usePluginHost();
+  const activePluginIds = pluginHost.enabledManifests.map(
+    (manifest) => manifest.id,
+  );
+  const visibleActionOrder = mergeTorrentActionOrder(
+    actionOrder,
+    activePluginIds,
+  );
+  const pluginNames = new Map(
+    pluginHost.enabledManifests.map((manifest) => [manifest.id, manifest.name]),
+  );
   const [themeColors, setThemeColors] = useState<Record<string, string> | null>(
     null,
   );
@@ -134,6 +153,9 @@ export function SettingsPage() {
     );
     setBlockedExtensions([...settings.data.SQ_EXTENSION_BLACKLIST]);
     setBlockedClients([...(settings.data.SQ_CLIENT_BLACKLIST ?? [])]);
+    setActionOrder([
+      ...(settings.data.SQ_TORRENT_ACTION_ORDER ?? []),
+    ]);
     setThemeColors({ ...settings.data.SQ_CUSTOM_THEME });
   }
   const editorsReady = editorSource !== null && themeColors !== null;
@@ -236,6 +258,7 @@ export function SettingsPage() {
         SQ_ALLOW_UNREGISTERED_VIEW: form.has("SQ_ALLOW_UNREGISTERED_VIEW"),
         SQ_ALLOW_GIF_AVATARS: form.has("SQ_ALLOW_GIF_AVATARS"),
         SQ_ENABLE_RSS_READERS: form.has("SQ_ENABLE_RSS_READERS"),
+        SQ_TORRENT_ACTION_ORDER: visibleActionOrder.slice(0, 50),
       };
       for (const key of numberFields) next[key] = Number(form.get(key));
       const saved = await apiFetch<AdminSettings>("/admin/settings", {
@@ -277,6 +300,7 @@ export function SettingsPage() {
         avatarMaxSizeKb: saved.SQ_AVATAR_MAX_SIZE_KB,
         allowGifAvatars: saved.SQ_ALLOW_GIF_AVATARS,
         rssReadersEnabled: saved.SQ_ENABLE_RSS_READERS,
+        torrentActionOrder: saved.SQ_TORRENT_ACTION_ORDER,
       });
       setMessage("Site settings saved and applied.");
     } catch (requestError) {
@@ -954,6 +978,71 @@ export function SettingsPage() {
                   Show feed reader shortcuts
                 </label>
               </div>
+            </section>
+
+            <section className="account-section">
+              <h2>Torrent actions</h2>
+              <p>
+                Button order for the actions row on torrent pages. Reorder
+                with the arrow buttons. Plugin buttons appear here while
+                their plugin is installed.
+              </p>
+              <ul className="source-list">
+                {visibleActionOrder.map((key, index) => (
+                  <li className="source-row" key={key}>
+                    <span>
+                      {torrentActionLabel(
+                        key,
+                        key.startsWith("plugin:")
+                          ? pluginNames.get(key.slice(7))
+                          : undefined,
+                      )}
+                    </span>
+                    <div className="category-edit-order">
+                      <button
+                        className="icon-action compact-button"
+                        type="button"
+                        disabled={index === 0}
+                        onClick={() =>
+                          setActionOrder((current) =>
+                            moveActionKey(
+                              mergeTorrentActionOrder(
+                                current,
+                                activePluginIds,
+                              ),
+                              index,
+                              -1,
+                            ),
+                          )
+                        }
+                        aria-label={`Move ${key} up`}
+                      >
+                        <ArrowUp aria-hidden="true" />
+                      </button>
+                      <button
+                        className="icon-action compact-button"
+                        type="button"
+                        disabled={index === visibleActionOrder.length - 1}
+                        onClick={() =>
+                          setActionOrder((current) =>
+                            moveActionKey(
+                              mergeTorrentActionOrder(
+                                current,
+                                activePluginIds,
+                              ),
+                              index,
+                              1,
+                            ),
+                          )
+                        }
+                        aria-label={`Move ${key} down`}
+                      >
+                        <ArrowDown aria-hidden="true" />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </section>
 
             <section className="account-section">

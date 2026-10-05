@@ -37,8 +37,20 @@ const validatePasswordStrength = (password, res) => {
 const normalizeEmail = (email) =>
   typeof email === "string" ? email.trim().toLowerCase() : email;
 
-const isValidEmail = (email) =>
-  typeof email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const isValidEmail = (email) => {
+  if (typeof email !== "string") return false;
+  if (email.length < 3 || email.length > 254) return false;
+  if (/\s/.test(email)) return false;
+  const at = email.indexOf("@");
+  if (at <= 0 || at !== email.lastIndexOf("@") || at === email.length - 1) {
+    return false;
+  }
+  const domain = email.slice(at + 1);
+  if (!domain.includes(".")) return false;
+  if (domain.startsWith(".") || domain.endsWith(".")) return false;
+  if (domain.includes("..")) return false;
+  return true;
+};
 
 export const sendVerificationEmail = async (mail, address, token) => {
   await mail.sendMail({
