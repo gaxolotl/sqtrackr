@@ -30,20 +30,6 @@ export const updateSettings = async (req, res, next) => {
       abortEarly: false,
       stripUnknown: false,
     });
-    for (const [category, sources] of Object.entries(
-      settings.SQ_TORRENT_CATEGORIES,
-    )) {
-      if (
-        !category.trim() ||
-        !Array.isArray(sources) ||
-        sources.some((source) => typeof source !== "string")
-      ) {
-        res
-          .status(400)
-          .send("Torrent categories must map category names to source arrays");
-        return;
-      }
-    }
 
     await SiteSettings.findByIdAndUpdate(
       "runtime",

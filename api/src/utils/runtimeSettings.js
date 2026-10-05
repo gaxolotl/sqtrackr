@@ -3,6 +3,45 @@ import SiteSettings from "../schema/siteSettings.js";
 
 const hexColor = /^#[a-f0-9]{6}$/i;
 
+const torrentCategorySources = (category) =>
+  yup
+    .array()
+    .of(yup.string().trim().min(1).max(100))
+    .max(500)
+    .test(
+      `${category}-items-unique`,
+      `Sources in category "${category}" must be unique`,
+      (sources) =>
+        (sources ?? []).every(
+          (source) =>
+            sources.filter((candidate) => candidate === source).length === 1,
+        ),
+    );
+
+const torrentCategoriesSchema = yup.lazy((value) => {
+  const entries = Object.keys(value ?? {}).reduce((obj, key) => {
+    obj[key] = torrentCategorySources(key);
+    return obj;
+  }, {});
+  return yup
+    .object(entries)
+    .required()
+    .test(
+      "categories-names",
+      "Category names must be 1-50 characters",
+      (categories) =>
+        !categories ||
+        Object.keys(categories).every(
+          (key) => key.trim().length > 0 && key.length <= 50,
+        ),
+    )
+    .test(
+      "categories-count",
+      "No more than 100 torrent categories",
+      (categories) => !categories || Object.keys(categories).length <= 100,
+    );
+});
+
 export const runtimeSettingsSchema = yup
   .object({
     SQ_SITE_NAME: yup.string().trim().min(1).max(20).required(),
@@ -31,7 +70,7 @@ export const runtimeSettingsSchema = yup
     SQ_MAXIMUM_HIT_N_RUNS: yup.number().integer().min(-1).max(10000).required(),
     SQ_MIN_SEEDTIME_HOURS: yup.number().min(0).max(8760).required(),
     SQ_HNR_GRACE_HOURS: yup.number().min(0).max(8760).required(),
-    SQ_TORRENT_CATEGORIES: yup.object().required(),
+    SQ_TORRENT_CATEGORIES: torrentCategoriesSchema,
     SQ_BP_EARNED_PER_GB: yup.number().min(0).max(100000).required(),
     SQ_BP_EARNED_PER_FILLED_REQUEST: yup.number().min(0).max(100000).required(),
     SQ_BP_COST_PER_INVITE: yup.number().min(0).max(100000).required(),
@@ -122,6 +161,8 @@ const numberKeys = new Set([
 ]);
 
 const fallbackValues = {
+  SQ_SITE_DEFAULT_LOCALE: "en",
+  SQ_ALLOW_REGISTER: "closed",
   SQ_MIN_SEEDTIME_HOURS: "72",
   SQ_HNR_GRACE_HOURS: "24",
   SQ_AVATAR_MAX_RESOLUTION: "512",

@@ -14,6 +14,10 @@ It implements all of the features required to run a private (or public) tracker 
   * Registration modes (open / closed / invite only)
   * Sending of invites
   * Account management (2FA, password resets etc.)
+  * Personal API tokens, announce-key rotation and sign-out-everywhere
+  * Notification center with unread badges
+  * Personal dashboard with stats, hit'n'run warnings and recent activity
+  * Server-side saved searches
   * Custom profiles with WebP avatars, bios, locations and websites
   * Bonus points system (purchase invites, upload etc.)
   * Option to browse torrents without logging in (for search engine discovery)
@@ -22,24 +26,29 @@ It implements all of the features required to run a private (or public) tracker 
   * Automatic movie and TV metadata matching via TMDB, with poster-backed suggestions
   * Natural-language and fuzzy search (e.g. "The Rookie season 6 episode 3")
   * Searching torrents or browsing by category or tags
+  * Personal "My submissions" view
+  * Customizable torrent action-button order (site setting)
   * Freeleech options (specific torrents, site-wide)
   * Torrent grouping (e.g. different formats of same movie)
   * Bookmarks
 * Upload / download tracking
   * Track how much content each user has uploaded / downloaded
   * Track ratios
-  * Track hit'n'runs
+  * Track hit'n'runs with snatch history and seedtime-based detection
   * Limit downloading per user based on ratio, HnRs, or both
   * Award bonus points based on upload
 * User interaction
   * Commenting on torrents and announcements
   * Up / down voting torrents
-  * Requests system
+  * Requests system with bonus-point bounties and top-ups
   * Categorised discussion forums with Markdown posts
+  * Link-only attachments with an admin toggle, and URL embeds with image rendering
   * Private one-to-one and group conversations with unread tracking
 * Moderation
   * Staff / admin privileges
+  * Combined moderation hub with members tab, bulk actions and an upload review queue
   * Optional premoderation queue for user uploads with retained decisions and private-message notifications
+  * User warnings with appeals and a staff audit log
   * Reporting torrents to be reviewed by staff
   * Detailed stats available to admins
   * Runtime-safe site settings available to admins without a service restart
@@ -47,18 +56,25 @@ It implements all of the features required to run a private (or public) tracker 
   * Wiki system
   * Announcements / news posts
   * Ban / unban users
+* Tracker integrity
+  * Banned BitTorrent client prefixes denied on announce
+  * Physically impossible upload speeds flagged for review
 * Plugins
   * Trusted, build-time plugin API with routes, storage, settings, events and UI slots
   * Enable, configure and remove installed plugins from **Settings → Plugins**
   * Ships with the Reseed example plugin for reviving torrents that have lost their seeders
+  * Ships with the Collages plugin for curated torrent collections
 * Tracker appearance
   * Configurable theme / CSS
+  * Installable PWA with app manifest and mobile polish
+  * Forum, announcements and RSS sections toggleable via config
+  * Per-user RSS token feed with open-source feed-reader shortcuts (toggleable)
 
 ## Roadmap
 
 The roadmap is still being expanded.
 
-* Anti-cheat
+* Expanded anti-cheat (automated flags and detection heuristics beyond client-blacklist and speed-anomaly logging)
 
 ## Quick Start
 

@@ -36,6 +36,10 @@ export const markNotificationsRead = async (req, res, next) => {
   try {
     const query = { userId: req.userId, read: false };
     if (Array.isArray(req.body?.ids) && req.body.ids.length) {
+      if (req.body.ids.length > 200) {
+        res.status(400).send("Too many notification ids (maximum 200)");
+        return;
+      }
       const ids = req.body.ids.filter((id) => mongoose.isValidObjectId(id));
       if (!ids.length) {
         res.status(400).send("No valid notification ids");

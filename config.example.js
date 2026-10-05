@@ -58,11 +58,12 @@ module.exports = {
     // Staff and admin uploads are published immediately.
     SQ_TORRENT_PREMODERATION: false,
 
-    // Minimum allowed ratio. Below this users will not be able to download. Set to -1 to disable.
+    // Minimum allowed ratio. Below this users will not be able to download. Set to -1 to disable. Maximum 100.
     SQ_MINIMUM_RATIO: 0.75,
 
     // Maximum allowed hit'n'runs. Above this users will not be allowed to download. Set to -1 to disable.
     // A user has committed a hit'n'run when a torrent is fully downloaded and not seeded to a 1:1 ratio.
+    // Maximum 10000.
     SQ_MAXIMUM_HIT_N_RUNS: 1,
 
     // Minimum seeding time in hours to avoid a hit'n'run (reaching 1:1 ratio also clears it).
@@ -73,6 +74,8 @@ module.exports = {
 
     // A map of torrent categories that can be selected when uploading.
     // Each has an array of zero or more sources available within that category.
+    // Category names must be 1-50 characters (100 categories max); sources
+    // must be unique, non-empty strings of at most 100 characters.
     SQ_TORRENT_CATEGORIES: {
       Movies: ["BluRay", "WebDL", "HDRip", "WebRip", "DVD", "Cam"],
       TV: [],
@@ -80,17 +83,20 @@ module.exports = {
       Books: [],
     },
 
-    // Number of bonus points awarded to a user for each GB they upload. Minimum 0.
+    // Number of bonus points awarded to a user for each GB they upload. Minimum 0, maximum 100000.
     SQ_BP_EARNED_PER_GB: 1,
 
     // Number of bonus points awarded to a user if they suggest a torrent to fill a request and it gets accepted
     // They get double if they also the uploader of the accepted torrent
+    // Minimum 0, maximum 100000.
     SQ_BP_EARNED_PER_FILLED_REQUEST: 1,
 
     // Number of bonus points it costs a user to buy 1 invite (set to 0 to disable buying invites).
+    // Minimum 0, maximum 100000.
     SQ_BP_COST_PER_INVITE: 3,
 
     // Number of bonus points it costs a user to buy 1 GB of upload (set to 0 to disable buying upload).
+    // Minimum 0, maximum 100000.
     SQ_BP_COST_PER_GB: 3,
 
     // Whether to enable freeleech on all torrents.
@@ -103,10 +109,12 @@ module.exports = {
     SQ_ALLOW_UNREGISTERED_VIEW: false,
 
     // An array of blacklisted file extensions. Torrents containing files with these extensions will fail to upload.
+    // Entries must be non-empty strings of at most 20 characters.
     SQ_EXTENSION_BLACKLIST: ["exe"],
 
     // An array of banned BitTorrent client peer-ID prefixes (e.g. "-AZ3020-").
     // Announces from matching clients are denied. Empty array disables.
+    // Entries must be non-empty strings of at most 20 characters.
     SQ_CLIENT_BLACKLIST: [],
 
     // Default site locale. See `client/locales/index.js` for available options.
@@ -155,6 +163,7 @@ module.exports = {
 
     // The URL of your MongoDB server. Under the recommended setup, it should be `mongodb://sq_mongodb/sqtracker`.
     // For local development, this should be `mongodb://127.0.0.1/sqtracker`.
+    // Hosted clusters (e.g. Atlas) use the `mongodb+srv://` scheme, which is also accepted.
     SQ_MONGO_URL: "mongodb://sq_mongodb/sqtracker",
 
     // Disables sending of any emails and removes the need for an SMTP server.

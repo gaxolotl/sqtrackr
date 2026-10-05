@@ -107,11 +107,19 @@ export const removeTorrentFromGroup = async (req, res, next) => {
 
 export const findFuzzyGroupMatches = async (req, res, next) => {
   try {
-    let { query } = req.query;
-    query = query ? decodeURIComponent(query) : undefined;
+    // Express already URI-decodes query parameters, so decoding again would
+    // corrupt values containing "%" and crash on malformed sequences.
+    const rawQuery = Array.isArray(req.query.query)
+      ? req.query.query[0]
+      : req.query.query;
+    const query = typeof rawQuery === "string" ? rawQuery.trim() : "";
 
     if (!query || query.length < 2) {
       res.status(400).send("Query must be at least 2 characters");
+      return;
+    }
+    if (query.length > 200) {
+      res.status(400).send("Query cannot exceed 200 characters");
       return;
     }
 

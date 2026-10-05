@@ -1123,10 +1123,12 @@ export const searchTorrents = (tracker) => async (req, res, next) => {
       query: typeof query === "string" ? query.trim().slice(0, 200) : undefined,
       category,
       source,
-      tag: tag ? decodeURIComponent(tag) : undefined,
+      // Express already URI-decodes query parameters; decoding again would
+      // corrupt values containing "%" and crash on malformed sequences.
+      tag: typeof tag === "string" ? tag : undefined,
       userId: req.userId,
       userRole: req.userRole,
-      sort: sort ? decodeURIComponent(sort) : undefined,
+      sort: typeof sort === "string" ? sort : undefined,
       tracker,
     });
     res.json(torrents);

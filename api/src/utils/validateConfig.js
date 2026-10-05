@@ -1,8 +1,47 @@
 import * as yup from "yup";
 
-const httpRegex = /http(s)?:\/\/.*/;
-const mongoRegex = /mongodb:\/\/.*/;
-const hexRegex = /#([a-f0-9]){6}/i;
+const httpRegex = /^https?:\/\/.+/;
+const mongoRegex = /^mongodb(\+srv)?:\/\/.+/;
+const hexRegex = /^#[a-f0-9]{6}$/i;
+
+const torrentCategorySources = (category) =>
+  yup
+    .array()
+    .of(yup.string().trim().min(1).max(100))
+    .max(500)
+    .test(
+      `${category}-items-unique`,
+      `Sources in category "${category}" must be unique`,
+      (sources) =>
+        (sources ?? []).every(
+          (source) =>
+            sources.filter((candidate) => candidate === source).length === 1,
+        ),
+    );
+
+const torrentCategoriesSchema = (value) => {
+  const entries = Object.keys(value ?? {}).reduce((obj, key) => {
+    obj[key] = torrentCategorySources(key);
+    return obj;
+  }, {});
+  return yup
+    .object(entries)
+    .required()
+    .test(
+      "categories-names",
+      "Category names must be 1-50 characters",
+      (categories) =>
+        !categories ||
+        Object.keys(categories).every(
+          (key) => key.trim().length > 0 && key.length <= 50,
+        ),
+    )
+    .test(
+      "categories-count",
+      "No more than 100 torrent categories",
+      (categories) => !categories || Object.keys(categories).length <= 100,
+    );
+};
 
 const configSchema = yup
   .object({
@@ -30,33 +69,18 @@ const configSchema = yup
           .required(),
         SQ_ALLOW_ANONYMOUS_UPLOADS: yup.boolean().required(),
         SQ_TORRENT_PREMODERATION: yup.boolean(),
-        SQ_MINIMUM_RATIO: yup.number().min(-1).required(),
-        SQ_MAXIMUM_HIT_N_RUNS: yup.number().integer().min(-1).required(),
+        SQ_MINIMUM_RATIO: yup.number().min(-1).max(100).required(),
+        SQ_MAXIMUM_HIT_N_RUNS: yup.number().integer().min(-1).max(10000).required(),
         SQ_MIN_SEEDTIME_HOURS: yup.number().min(0).max(8760),
         SQ_HNR_GRACE_HOURS: yup.number().min(0).max(8760),
-        SQ_BP_EARNED_PER_GB: yup.number().min(0).required(),
-        SQ_BP_EARNED_PER_FILLED_REQUEST: yup.number().min(0).required(),
-        SQ_BP_COST_PER_INVITE: yup.number().min(0).required(),
-        SQ_BP_COST_PER_GB: yup.number().min(0).required(),
+        SQ_BP_EARNED_PER_GB: yup.number().min(0).max(100000).required(),
+        SQ_BP_EARNED_PER_FILLED_REQUEST: yup.number().min(0).max(100000).required(),
+        SQ_BP_COST_PER_INVITE: yup.number().min(0).max(100000).required(),
+        SQ_BP_COST_PER_GB: yup.number().min(0).max(100000).required(),
         SQ_SITE_WIDE_FREELEECH: yup.boolean().required(),
-        SQ_TORRENT_CATEGORIES: yup.lazy((value) => {
-          const entries = Object.keys(value).reduce((obj, key) => {
-            obj[key] = yup
-              .array()
-              .of(yup.string())
-              .min(0)
-              .test(
-                `${key}-items-unique`,
-                `Sources in category "${key}" must be unique`,
-                (value) =>
-                  value.every(
-                    (source) => value.filter((c) => c === source).length === 1,
-                  ),
-              );
-            return obj;
-          }, {});
-          return yup.object(entries).required();
-        }),
+        SQ_TORRENT_CATEGORIES: yup.lazy((value) =>
+          torrentCategoriesSchema(value),
+        ),
         SQ_ALLOW_UNREGISTERED_VIEW: yup.boolean().required(),
         SQ_CUSTOM_THEME: yup.object({
           primary: yup.string().matches(hexRegex),
@@ -66,8 +90,16 @@ const configSchema = yup
           text: yup.string().matches(hexRegex),
           grey: yup.string().matches(hexRegex),
         }),
-        SQ_EXTENSION_BLACKLIST: yup.array().of(yup.string()).min(0),
-        SQ_CLIENT_BLACKLIST: yup.array().of(yup.string()).min(0),
+        SQ_EXTENSION_BLACKLIST: yup
+          .array()
+          .of(yup.string().trim().min(1).max(20))
+          .max(500)
+          .min(0),
+        SQ_CLIENT_BLACKLIST: yup
+          .array()
+          .of(yup.string().trim().min(1).max(20))
+          .max(500)
+          .min(0),
         SQ_SITE_DEFAULT_LOCALE: yup
           .string()
           .oneOf(["en", "bg", "es", "it", "ru", "de", "zh", "eo", "fr"]),
@@ -75,7 +107,10 @@ const configSchema = yup
         SQ_AVATAR_MAX_SIZE_KB: yup.number().integer().min(32).max(5120),
         SQ_ALLOW_GIF_AVATARS: yup.boolean(),
         SQ_ENABLE_RSS_READERS: yup.boolean(),
-        SQ_TORRENT_ACTION_ORDER: yup.array().of(yup.string()),
+        SQ_TORRENT_ACTION_ORDER: yup
+          .array()
+          .of(yup.string().trim().min(1).max(64))
+          .max(50),
         SQ_ENABLE_FORUM: yup.boolean(),
         SQ_ENABLE_ANNOUNCEMENTS: yup.boolean(),
         SQ_ENABLE_RSS: yup.boolean(),
