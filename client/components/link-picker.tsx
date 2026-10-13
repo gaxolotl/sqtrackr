@@ -5,8 +5,12 @@ import { Link2 } from "lucide-react";
 
 const IMAGE_PATTERN = /\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i;
 
-const isSafeUrl = (value: string) =>
-  /^https?:\/\//i.test(value) || value.startsWith("/");
+const isSafeUrl = (value: string) => {
+  if (!value) return false;
+  if (/^https?:\/\//i.test(value)) return true;
+  // Single-slash relative only: reject protocol-relative //evil.
+  return value.startsWith("/") && !value.startsWith("//");
+};
 
 export function LinkPicker({
   onInsert,

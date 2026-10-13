@@ -189,10 +189,13 @@ module.exports = {
     SQ_SMTP_SECURE: false,
   },
   secrets: {
-    // A secret value to sign tokens with. Should be long and random.
+    // A secret value to sign tokens with. Must be at least 32 characters;
+    // generate with `openssl rand -hex 32`. Production refuses to boot
+    // with the example default below.
     SQ_JWT_SECRET: "long_random_string",
 
-    // A secret value to verify server requests with. Should be long and random, and different to the JWT secret.
+    // A secret value to verify server requests with. Must be at least 32
+    // characters and different to the JWT secret.
     SQ_SERVER_SECRET: "another_long_random_string",
 
     // The email address to use for the initial admin user.

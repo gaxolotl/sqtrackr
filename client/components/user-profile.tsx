@@ -134,7 +134,7 @@ export function UserProfile({ username }: { username: string }) {
     setActionError("");
     setMessage("");
     try {
-      await apiFetch(`/user/unwarn/${warningId}`, { method: "POST" });
+      await apiFetch(`/user/unwarn/${encodeURIComponent(warningId)}`, { method: "POST" });
       setMessage("Warning resolved.");
       reload();
     } catch (requestError) {

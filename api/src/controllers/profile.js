@@ -74,6 +74,8 @@ export const updateOwnProfile = async (req, res, next) => {
   }
 };
 
+const MAX_AVATAR_FRAMES = 60;
+
 async function compressAvatar(input, maxResolution, maxBytes, animated) {
   let dimensions = maxResolution;
   const qualities = [84, 74, 64, 54, 44, 34];
@@ -140,6 +142,10 @@ export const uploadAvatar = async (req, res, next) => {
       res.status(400).send("Avatar image format is not supported");
       return;
     }
+    if ((metadata.pages ?? 1) > MAX_AVATAR_FRAMES) {
+      res.status(400).send("Avatar animation has too many frames");
+      return;
+    }
     if (
       metadata.format === "gif" &&
       process.env.SQ_ALLOW_GIF_AVATARS !== "true"
@@ -148,8 +154,15 @@ export const uploadAvatar = async (req, res, next) => {
       return;
     }
 
-    const maxResolution = Number(process.env.SQ_AVATAR_MAX_RESOLUTION || 512);
-    const maxBytes = Number(process.env.SQ_AVATAR_MAX_SIZE_KB || 512) * 1024;
+    const rawResolution = Number(process.env.SQ_AVATAR_MAX_RESOLUTION || 512);
+    const rawSizeKb = Number(process.env.SQ_AVATAR_MAX_SIZE_KB || 512);
+    const maxResolution = Number.isFinite(rawResolution)
+      ? Math.min(2048, Math.max(64, Math.floor(rawResolution)))
+      : 512;
+    const maxBytes =
+      (Number.isFinite(rawSizeKb)
+        ? Math.min(5120, Math.max(32, Math.floor(rawSizeKb)))
+        : 512) * 1024;
     let avatar;
     try {
       avatar = await compressAvatar(

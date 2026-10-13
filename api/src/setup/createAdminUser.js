@@ -10,7 +10,10 @@ const createAdminUser = async (mail) => {
   if (!existingAdmin) {
     const created = Date.now();
 
-    const hash = await bcrypt.hash("admin", 10);
+    // Fresh installs must not boot with a predictable password. Generate a
+    // one-time random password and print it once; the operator must change it.
+    const initialPassword = crypto.randomBytes(16).toString("hex");
+    const hash = await bcrypt.hash(initialPassword, 10);
 
     const adminUser = new User({
       username: "admin",
@@ -21,18 +24,16 @@ const createAdminUser = async (mail) => {
       remainingInvites: Number.MAX_SAFE_INTEGER,
       emailVerified: envFlag("SQ_DISABLE_EMAIL"),
     });
-    adminUser.uid = crypto
-      .createHash("sha256")
-      .update(adminUser._id.toString())
-      .digest("hex")
-      .slice(0, 10);
+    adminUser.uid = crypto.randomBytes(16).toString("hex");
     adminUser.token = jwt.sign(
       {
+        typ: "auth",
         id: adminUser._id,
         created,
         role: "admin",
       },
-      process.env.SQ_JWT_SECRET
+      process.env.SQ_JWT_SECRET,
+      { expiresIn: "7d" },
     );
 
     await adminUser.save();
@@ -41,10 +42,12 @@ const createAdminUser = async (mail) => {
       const emailVerificationValidUntil = created + 48 * 60 * 60 * 1000;
       const emailVerificationToken = jwt.sign(
         {
+          typ: "email-verify",
           user: process.env.SQ_ADMIN_EMAIL,
           validUntil: emailVerificationValidUntil,
         },
-        process.env.SQ_JWT_SECRET
+        process.env.SQ_JWT_SECRET,
+        { expiresIn: "48h" },
       );
       await sendVerificationEmail(
         mail,
@@ -55,7 +58,7 @@ const createAdminUser = async (mail) => {
 
     console.log("[sq] created initial admin user");
     console.warn(
-      "[sq] SECURITY: initial admin uses default password 'admin' - change it immediately",
+      `[sq] SECURITY: initial admin password (one-time, change immediately): ${initialPassword}`,
     );
   } else {
     try {

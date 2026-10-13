@@ -73,7 +73,16 @@ const auth = async (req, res, next) => {
       return;
     }
     try {
-      const decoded = jwt.verify(token, process.env.SQ_JWT_SECRET);
+      const decoded = jwt.verify(token, process.env.SQ_JWT_SECRET, {
+        algorithms: ["HS256"],
+      });
+      // Only session tokens authenticate. Invite/reset/verify tokens share
+      // the same secret, so reject any token whose typ is present but not
+      // "auth". Legacy tokens without typ are accepted during rotation.
+      if (decoded?.typ !== undefined && decoded.typ !== "auth") {
+        res.status(401).send("Invalid authentication token");
+        return;
+      }
       if (decoded) {
         const user = await User.findOne(
           { _id: decoded.id },

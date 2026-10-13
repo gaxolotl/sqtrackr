@@ -14,8 +14,12 @@ export class ApiError extends Error {
 
 export function apiOrigin() {
   if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
-  if (typeof window !== "undefined")
+  if (typeof window !== "undefined") {
+    // Pinned API URL is required in production so DNS-rebinding or a
+    // hardcoded :3001 fallback cannot point the client at an attacker host.
+    if (process.env.NODE_ENV === "production") return window.location.origin;
     return `${window.location.protocol}//${window.location.hostname}:3001`;
+  }
   return "http://localhost:3001";
 }
 
@@ -35,6 +39,9 @@ export async function apiFetch<T>(
   path: string,
   options: ApiOptions = {},
 ): Promise<T> {
+  if (!path.startsWith("/")) {
+    throw new ApiError("API path must start with /", 400);
+  }
   const { auth = true, headers, ...requestOptions } = options;
   const session = getStoredSession();
   const requestHeaders = new Headers(headers);

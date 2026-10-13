@@ -149,8 +149,8 @@ const configSchema = yup
       .required(),
     secrets: yup
       .object({
-        SQ_JWT_SECRET: yup.string().required(),
-        SQ_SERVER_SECRET: yup.string().required(),
+        SQ_JWT_SECRET: yup.string().min(32).required(),
+        SQ_SERVER_SECRET: yup.string().min(32).required(),
         SQ_ADMIN_EMAIL: yup.string().email().required(),
         SQ_SMTP_USER: yup.string(),
         SQ_SMTP_PASS: yup.string(),
@@ -188,48 +188,45 @@ const configSchema = yup
 const warnWeakSecrets = (config) => {
   const jwt = config?.secrets?.SQ_JWT_SECRET;
   const server = config?.secrets?.SQ_SERVER_SECRET;
+  const weak = [];
   if (typeof jwt === "string" && jwt.length < 32) {
-    console.warn(
-      "[sq] SECURITY: SQ_JWT_SECRET is shorter than 32 characters - use a long random value",
-    );
+    weak.push("SQ_JWT_SECRET is shorter than 32 characters");
   }
   if (typeof server === "string" && server.length < 32) {
-    console.warn(
-      "[sq] SECURITY: SQ_SERVER_SECRET is shorter than 32 characters - use a long random value",
-    );
+    weak.push("SQ_SERVER_SECRET is shorter than 32 characters");
   }
   if (
     jwt === "long_random_string" ||
     server === "another_long_random_string"
   ) {
-    console.warn(
-      "[sq] SECURITY: secrets still use the example defaults - change them immediately",
-    );
+    weak.push("secrets still use the example defaults");
   }
   if (jwt && server && jwt === server) {
-    console.warn(
-      "[sq] SECURITY: SQ_JWT_SECRET and SQ_SERVER_SECRET must differ",
-    );
+    weak.push("SQ_JWT_SECRET and SQ_SERVER_SECRET must differ");
+  }
+  for (const message of weak) {
+    console.warn(`[sq] SECURITY: ${message} - use long random values`);
+  }
+  if (weak.length && process.env.NODE_ENV === "production") {
+    console.error("[sq] ERROR: refusing to boot with weak secrets in production");
+    process.exit(1);
   }
 };
 
 const validateConfig = async (config) => {
   try {
-    const serializedConfig = Object.fromEntries(
-      Object.entries({ ...config.envs, ...config.secrets }).map(
-        ([key, value]) => [
-          key,
-          value !== null && typeof value === "object"
-            ? JSON.stringify(value)
-            : String(value),
-        ],
-      ),
-    );
-    process.env = {
-      ...process.env,
-      ...serializedConfig,
-    };
     await configSchema.validate(config);
+    // Assign per-key so existing process.env references stay intact and
+    // secrets are not spread through a replaced object.
+    for (const [key, value] of Object.entries({
+      ...config.envs,
+      ...config.secrets,
+    })) {
+      process.env[key] =
+        value !== null && typeof value === "object"
+          ? JSON.stringify(value)
+          : String(value);
+    }
     console.log("[sq] configuration is valid");
     warnWeakSecrets(config);
   } catch (e) {

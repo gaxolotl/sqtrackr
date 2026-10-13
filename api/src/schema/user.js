@@ -51,8 +51,8 @@ const User = new mongoose.Schema({
   rssTokenHash: { type: String, unique: true, sparse: true },
 });
 
-User.index({ username: 1 });
-User.index({ email: 1 });
+User.index({ username: 1 }, { unique: true });
+User.index({ email: 1 }, { unique: true });
 User.index({ uid: 1 });
 
 export default mongoose.model("user", User);

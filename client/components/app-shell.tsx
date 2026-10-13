@@ -127,18 +127,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const theme = config.customTheme ?? {};
+    const isHex = (value: unknown): value is string =>
+      typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value);
+    const primary = isHex(theme.primary) ? theme.primary : undefined;
     const root = document.documentElement;
     const variables: Record<string, string | undefined> = {
-      "--accent": theme.primary,
-      "--accent-hover": theme.primary,
-      "--accent-soft": theme.primary
-        ? `color-mix(in srgb, ${theme.primary} 12%, transparent)`
+      "--accent": primary,
+      "--accent-hover": primary,
+      "--accent-soft": primary
+        ? `color-mix(in srgb, ${primary} 12%, transparent)`
         : undefined,
-      "--page": theme.background,
-      "--sidebar": theme.sidebar,
-      "--border": theme.border,
-      "--text": theme.text,
-      "--muted": theme.grey,
+      "--page": isHex(theme.background) ? theme.background : undefined,
+      "--sidebar": isHex(theme.sidebar) ? theme.sidebar : undefined,
+      "--border": isHex(theme.border) ? theme.border : undefined,
+      "--text": isHex(theme.text) ? theme.text : undefined,
+      "--muted": isHex(theme.grey) ? theme.grey : undefined,
       "--content-max-width": `${Math.min(
         2560,
         Math.max(640, config.contentMaxWidth),

@@ -9,8 +9,7 @@ export default function LogoutPage() {
   const { logout } = useAuth();
 
   useEffect(() => {
-    logout();
-    router.replace("/login");
+    void logout().finally(() => router.replace("/login"));
   }, [logout, router]);
 
   return <main className="page"><div className="state-panel">Logging out…</div></main>;

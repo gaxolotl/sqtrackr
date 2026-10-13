@@ -76,9 +76,16 @@ validateConfig(config)
     if (process.env.SENTRY_DSN) {
       Sentry.init({
         dsn: process.env.SENTRY_DSN,
-        tracesSampleRate: 1.0,
+        tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
         environment:
           process.env.NODE_ENV === "production" ? "production" : "development",
+        beforeSend(event) {
+          if (event.request?.headers) {
+            delete event.request.headers.authorization;
+            delete event.request.headers.cookie;
+          }
+          return event;
+        },
       });
 
       Sentry.setContext("deployment", {
@@ -158,6 +165,16 @@ validateConfig(config)
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("X-Frame-Options", "SAMEORIGIN");
       res.setHeader("Referrer-Policy", "no-referrer");
+      res.setHeader(
+        "Permissions-Policy",
+        "camera=(), microphone=(), geolocation=(), browsing-topics=()",
+      );
+      if (process.env.NODE_ENV === "production") {
+        res.setHeader(
+          "Strict-Transport-Security",
+          "max-age=63072000; includeSubDomains",
+        );
+      }
       next();
     });
 
@@ -202,16 +219,19 @@ validateConfig(config)
     );
 
     // Open CORS in dev (localhost/127.0.0.1/port mixing); restrict by
-    // SQ_BASE_URL in production only.
+    // SQ_BASE_URL in production only. Fail closed when no allowlist is set.
     const corsOrigins = (process.env.SQ_BASE_URL ?? "")
       .split(",")
       .map((o) => o.trim())
       .filter(Boolean);
+    const isProduction = process.env.NODE_ENV === "production";
     app.use(
       cors(
-        process.env.NODE_ENV === "production" && corsOrigins.length
+        corsOrigins.length
           ? { origin: corsOrigins, credentials: false }
-          : {},
+          : isProduction
+            ? { origin: false, credentials: false }
+            : {},
       ),
     );
 
@@ -226,6 +246,8 @@ validateConfig(config)
     const rateLimitOptions = (max, windowMs) => ({
       windowMs,
       max,
+      standardHeaders: "draft-8",
+      legacyHeaders: false,
       keyGenerator: (req) => {
         const forwarded = req.headers["x-forwarded-for"];
         if (
@@ -239,9 +261,9 @@ validateConfig(config)
         return req.ip;
       },
       skip: (req) => {
-        return (
-          process.env.NODE_ENV !== "production" || req.method === "OPTIONS"
-        );
+        // Keep limits enabled in every environment so dev/staging clones with
+        // production data cannot be brute-forced. OPTIONS stays exempt.
+        return req.method === "OPTIONS";
       },
     });
 
@@ -251,6 +273,9 @@ validateConfig(config)
 
     // stricter limits on endpoints that are attractive to brute force
     const authLimiter = ratelimit(rateLimitOptions(10, 1000 * 60 * 15));
+    // expensive authenticated routes: search, RSS, avatar, download
+    const searchLimiter = ratelimit(rateLimitOptions(30, 1000 * 60));
+    const rssLimiter = ratelimit(rateLimitOptions(60, 1000 * 60));
 
     const tracker = new Tracker.Server({
       http: false,
@@ -269,7 +294,17 @@ validateConfig(config)
     app.get("/sq/*/announce", createTrackerRoute("announce", onTrackerRequest));
     app.get("/sq/*/scrape", createTrackerRoute("scrape", onTrackerRequest));
 
-    app.use(bodyParser.json({ limit: "15mb" }));
+    // Small default body limit; large uploads mount a higher limit only on
+    // their own routes so login/comments/votes cannot be used for memory DoS.
+    const smallJson = bodyParser.json({ limit: "100kb" });
+    const largeJson = bodyParser.json({ limit: "12mb" });
+    app.use((req, res, next) => {
+      const largePath =
+        req.path.startsWith("/torrent") ||
+        req.path.includes("/avatar") ||
+        req.path.startsWith("/plugins");
+      return (largePath ? largeJson : smallJson)(req, res, next);
+    });
     app.use(cookieParser());
 
     app.get("/", (req, res) => {
@@ -341,8 +376,8 @@ validateConfig(config)
     app.post("/reset-password/finalise", authLimiter, finalisePasswordReset);
     app.post("/verify-email", authLimiter, verifyUserEmail);
 
-    // rss feed (auth handled in cookies)
-    app.get("/rss", (req, res, next) => {
+    // rss feed (token auth in query)
+    app.get("/rss", rssLimiter, (req, res, next) => {
       if (process.env.SQ_ENABLE_RSS === "false") {
         res.status(403).send("RSS is disabled");
         return;
@@ -351,7 +386,7 @@ validateConfig(config)
     });
 
     // torrent file download (can download without auth, will not be able to announce)
-    app.get("/torrent/download/:infoHash/:userId", downloadTorrent);
+    app.get("/torrent/download/:infoHash/:userId", searchLimiter, downloadTorrent);
 
     const whenPublicViewingEnabled = (handler) => (req, res, next) => {
       if (!envFlag("SQ_ALLOW_UNREGISTERED_VIEW") || req.headers.authorization) {
@@ -367,6 +402,7 @@ validateConfig(config)
     app.get("/torrent/latest", whenPublicViewingEnabled(listLatest(tracker)));
     app.get(
       "/torrent/search",
+      searchLimiter,
       whenPublicViewingEnabled(searchTorrents(tracker)),
     );
     app.get("/torrent/tags", whenPublicViewingEnabled(listTags));
@@ -412,7 +448,11 @@ validateConfig(config)
     await databaseReady;
     await pluginHost.initialize();
     await pluginHost.ready();
-    const port = process.env.SQ_PORT || 3001;
+    const parsedPort = Number(process.env.SQ_PORT || 3001);
+    const port =
+      Number.isInteger(parsedPort) && parsedPort >= 1 && parsedPort <= 65535
+        ? parsedPort
+        : 3001;
     const server = await new Promise((resolve, reject) => {
       const listener = app.listen(port, () => resolve(listener));
       listener.once("error", reject);

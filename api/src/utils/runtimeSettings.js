@@ -207,7 +207,12 @@ const parseEnvironmentValue = (key, value) => {
           : [];
     }
   }
-  if (booleanKeys.has(key)) return value === "true";
+  if (booleanKeys.has(key)) {
+    if (value === "true") return true;
+    if (value === "false") return false;
+    if (typeof value === "boolean") return value;
+    return false;
+  }
   if (numberKeys.has(key)) return Number(value);
   return value;
 };
@@ -222,7 +227,9 @@ export const getRuntimeSettings = () => {
 };
 
 export const applyRuntimeSettings = (settings) => {
-  for (const [key, value] of Object.entries(settings)) {
+  const allowed = new Set(Object.keys(runtimeSettingsSchema.fields));
+  for (const [key, value] of Object.entries(settings ?? {})) {
+    if (!allowed.has(key)) continue;
     process.env[key] =
       value !== null && typeof value === "object"
         ? JSON.stringify(value)
@@ -232,5 +239,13 @@ export const applyRuntimeSettings = (settings) => {
 
 export const loadRuntimeSettings = async () => {
   const saved = await SiteSettings.findById("runtime").lean();
-  if (saved?.values) applyRuntimeSettings(saved.values);
+  if (!saved?.values) return;
+  try {
+    const validated = runtimeSettingsSchema.validateSync(saved.values, {
+      stripUnknown: true,
+    });
+    applyRuntimeSettings(validated);
+  } catch {
+    console.warn("[sq] ignoring invalid runtime settings in database");
+  }
 };

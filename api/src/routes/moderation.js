@@ -15,9 +15,10 @@ const router = express.Router();
 const limiter = ratelimit({
   windowMs: 1000 * 60,
   max: 120,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
   keyGenerator: (req) => req.userId?.toString() ?? req.ip,
-  skip: (req) =>
-    process.env.NODE_ENV !== "production" || req.method === "OPTIONS",
+  skip: (req) => req.method === "OPTIONS",
 });
 
 export default () => {

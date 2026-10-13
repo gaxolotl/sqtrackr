@@ -21,7 +21,7 @@ type AuthContextValue = {
   session: AuthSession | null;
   login: (fields: LoginFields) => Promise<AuthSession>;
   register: (fields: RegisterFields) => Promise<AuthSession>;
-  logout: () => void;
+  logout: (opts?: { revoke?: boolean }) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -121,7 +121,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         saveSession(nextSession);
         return nextSession;
       },
-      logout() {
+      async logout(opts?: { revoke?: boolean }) {
+        // Revoke the current server session so a stolen JWT dies on logout.
+        // Failures still clear locally so logout never strands the user.
+        if (opts?.revoke !== false) {
+          try {
+            const listed = await apiFetch<{ sessions: Array<{ id: string; current: boolean }> }>(
+              "/account/sessions",
+            );
+            const current = listed.sessions.find((s) => s.current);
+            if (current) {
+              await apiFetch(`/account/sessions/${encodeURIComponent(current.id)}`, {
+                method: "DELETE",
+              });
+            }
+          } catch {
+            // Server revoke is best-effort; local clear below is authoritative.
+          }
+        }
         saveSession(null);
       },
     }),

@@ -166,7 +166,7 @@ export function AccountPage() {
     setMessage("");
     setActionError("");
     try {
-      await apiFetch(`/account/tokens/${id}`, { method: "DELETE" });
+      await apiFetch(`/account/tokens/${encodeURIComponent(id)}`, { method: "DELETE" });
       setMessage("API token revoked.");
       tokens.reload();
     } catch (requestError) {
@@ -217,9 +217,9 @@ export function AccountPage() {
     setMessage("");
     setActionError("");
     try {
-      await apiFetch(`/account/sessions/${device.id}`, { method: "DELETE" });
+      await apiFetch(`/account/sessions/${encodeURIComponent(device.id)}`, { method: "DELETE" });
       if (device.current) {
-        logout();
+        void logout({ revoke: false });
         router.push("/login");
         return;
       }
@@ -248,7 +248,7 @@ export function AccountPage() {
     } catch {
       // The session may already be invalid; continue to log out locally.
     }
-    logout();
+    void logout({ revoke: false });
     router.push("/login");
   }
 
@@ -647,7 +647,7 @@ export function AccountPage() {
                   type="button"
                   onClick={() =>
                     navigator.clipboard.writeText(
-                      `${window.location.origin}/register?token=${invite.token}`,
+                      `${window.location.origin}/register?token=${encodeURIComponent(invite.token)}`,
                     )
                   }
                   aria-label="Copy invite link"

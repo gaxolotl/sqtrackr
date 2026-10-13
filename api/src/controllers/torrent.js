@@ -647,7 +647,7 @@ export const downloadTorrent = async (req, res, next) => {
     const user = await User.findOne({ uid: userId }, { uid: 1 }).lean();
 
     if (!user) {
-      res.status(401).send(`User does not exist`);
+      res.status(404).send("Torrent does not exist");
       return;
     }
 
@@ -669,9 +669,9 @@ export const downloadTorrent = async (req, res, next) => {
     delete parsed["announce-list"];
     parsed.info.private = 1;
 
-    const fileName = `${bytesToString(parsed.info.name)} - ${
-      process.env.SQ_SITE_NAME
-    }.torrent`;
+    const rawName = bytesToString(parsed.info.name).slice(0, 100);
+    const safeName = rawName.replace(/[\x00-\x1f\x7f"]/g, "").trim() || "download";
+    const fileName = `${safeName} - ${process.env.SQ_SITE_NAME}.torrent`;
 
     res.setHeader("Content-Type", "application/x-bittorrent");
     res.setHeader("Content-Disposition", contentDisposition(fileName));

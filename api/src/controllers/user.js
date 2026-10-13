@@ -54,12 +54,24 @@ const isValidEmail = (email) => {
   return true;
 };
 
+// Announce keys (uid) are bearer capabilities for /announce/:uid and
+// /torrent/download/:infoHash/:uid. They must be unpredictable: 128-bit
+// random hex with a collision check, never a truncated hash of the ObjectId.
+const generateUniqueUid = async (UserModel) => {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const candidate = crypto.randomBytes(16).toString("hex");
+    const collision = await UserModel.findOne({ uid: candidate }).lean();
+    if (!collision) return candidate;
+  }
+  throw new Error("Could not generate a unique announce key");
+};
+
 // Backup codes are single-use 2FA fallbacks. Only sha256 hashes touch the
 // database; the plaintext codes are shown to the user once at enrollment.
 // Hashes (64 lowercase hex chars) are also what makes single-use atomic: the
 // consume step matches the hash in the query filter and $pulls it in the
 // same findOneAndUpdate, so a concurrent loser finds nothing to match.
-// Plain 10-char codes never collide with the 64-char hash shape, which lets
+// Plain 20-char codes never collide with the 64-char hash shape, which lets
 // the login path tell legacy plaintext entries apart from hashes.
 const hashBackupCode = (code) =>
   crypto.createHash("sha256").update(code).digest("hex");
@@ -77,6 +89,30 @@ const isBackupCodeHash = (value) =>
 // Without this, attackers can enumerate usernames via response timing.
 const DUMMY_BCRYPT_HASH =
   "$2b$10$0sWAPAIMkFbf9ij7IYI76.k7VfDHCaLekALY.Pa6P8wHeavM1nUQK";
+
+// Per-account TOTP guessing limiter: 10 attempts per 15 minutes. IP
+// rate-limiting alone is bypassable via botnet rotation.
+const totpAttempts = new Map();
+const checkTotpRateLimit = (userId) => {
+  const now = Date.now();
+  const entry = totpAttempts.get(String(userId));
+  if (entry && entry.resetAt < now) totpAttempts.delete(String(userId));
+  const current = totpAttempts.get(String(userId));
+  return !current || current.count < 10;
+};
+const recordTotpFailure = (userId) => {
+  const now = Date.now();
+  const key = String(userId);
+  const entry = totpAttempts.get(key);
+  if (!entry || entry.resetAt < now) {
+    totpAttempts.set(key, { count: 1, resetAt: now + 15 * 60 * 1000 });
+  } else {
+    entry.count += 1;
+  }
+};
+const clearTotpFailures = (userId) => {
+  totpAttempts.delete(String(userId));
+};
 
 // JWT `typ` separation: all tokens share SQ_JWT_SECRET, so each token carries
 // a `typ` claim at sign time ("auth" for 7d sessions, "email-verify",
@@ -101,6 +137,10 @@ const verifyTotpStepUp = async (user, code, res) => {
     res.status(401).send("One-time code required");
     return false;
   }
+  if (!checkTotpRateLimit(user._id)) {
+    res.status(429).send("Too many one-time code attempts");
+    return false;
+  }
   const validToken = speakeasy.totp.verify({
     secret: user.totp.secret,
     encoding: "base32",
@@ -120,6 +160,7 @@ const verifyTotpStepUp = async (user, code, res) => {
       { $pull: { "totp.backup": code } },
     ));
   if (!legacyConsumed) {
+    recordTotpFailure(user._id);
     res.status(401).send("Invalid TOTP code");
     return false;
   }
@@ -218,7 +259,9 @@ export const register = (mail) => async (req, res, next) => {
       try {
         let decoded;
         try {
-          decoded = jwt.verify(req.body.invite, process.env.SQ_JWT_SECRET);
+          decoded = jwt.verify(req.body.invite, process.env.SQ_JWT_SECRET, {
+            algorithms: ["HS256"],
+          });
         } catch (err) {
           if (
             err?.name === "JsonWebTokenError" ||
@@ -385,11 +428,7 @@ export const register = (mail) => async (req, res, next) => {
           },
         });
 
-        newUser.uid = crypto
-          .createHash("sha256")
-          .update(newUser._id.toString())
-          .digest("hex")
-          .slice(0, 10);
+        newUser.uid = await generateUniqueUid(User);
 
         const createdUser = await newUser.save();
         accountCreated = true;
@@ -403,6 +442,7 @@ export const register = (mail) => async (req, res, next) => {
               validUntil: emailVerificationValidUntil,
             },
             process.env.SQ_JWT_SECRET,
+            { expiresIn: "48h" },
           );
           await sendVerificationEmail(
             mail,
@@ -435,11 +475,10 @@ export const register = (mail) => async (req, res, next) => {
           res.status(500).send("User could not be created");
         }
       } else {
-        res
-          .status(409)
-          .send(
-            "An account with that email address or username already exists",
-          );
+        // Generic response so unauthenticated callers cannot enumerate
+        // registered emails/usernames for credential-stuffing. Login and
+        // reset paths already use generic messages.
+        res.status(400).send("Could not create account with provided details");
       }
     } catch (e) {
       if (inviteClaimed && !accountCreated) {
@@ -504,6 +543,10 @@ export const login = async (req, res, next) => {
             res.status(401).send("One-time code required");
             return;
           }
+          if (!checkTotpRateLimit(user._id)) {
+            res.status(429).send("Too many one-time code attempts");
+            return;
+          }
           const validToken = speakeasy.totp.verify({
             secret: user.totp.secret,
             encoding: "base32",
@@ -541,6 +584,7 @@ export const login = async (req, res, next) => {
                     )
                   : null;
               if (!legacyConsumed) {
+                recordTotpFailure(user._id);
                 res.status(401).send("Incorrect login details");
                 return;
               }
@@ -563,6 +607,7 @@ export const login = async (req, res, next) => {
         }
 
         if (matches) {
+          clearTotpFailures(user._id);
           const jti = await createLoginSession(req, user._id);
           res.send({
             token: jwt.sign(
@@ -656,6 +701,7 @@ export const generateInvite = (mail) => async (req, res, next) => {
     invite.token = jwt.sign(
       { typ: "invite", id: invite._id, validUntil },
       process.env.SQ_JWT_SECRET,
+      { expiresIn: "48h" },
     );
 
     const createdInvite = await invite.save();
@@ -792,6 +838,7 @@ export const initiatePasswordReset = (mail) => async (req, res, next) => {
           key: user.pwdVersion,
         },
         process.env.SQ_JWT_SECRET,
+        { expiresIn: "24h" },
       );
 
       if (!envFlag("SQ_DISABLE_EMAIL")) {
@@ -841,7 +888,9 @@ export const finalisePasswordReset = async (req, res, next) => {
       // all reset failures share one message without breaking the valid flow.
       let decoded = null;
       try {
-        decoded = jwt.verify(token, process.env.SQ_JWT_SECRET);
+        decoded = jwt.verify(token, process.env.SQ_JWT_SECRET, {
+          algorithms: ["HS256"],
+        });
       } catch (err) {
         if (
           err?.name === "JsonWebTokenError" ||
@@ -1571,7 +1620,9 @@ export const verifyUserEmail = async (req, res, next) => {
     try {
       let decoded;
       try {
-        decoded = jwt.verify(req.body.token, process.env.SQ_JWT_SECRET);
+        decoded = jwt.verify(req.body.token, process.env.SQ_JWT_SECRET, {
+          algorithms: ["HS256"],
+        });
       } catch (err) {
         if (
           err?.name === "JsonWebTokenError" ||
@@ -1622,7 +1673,7 @@ export const verifyUserEmail = async (req, res, next) => {
 export const banUser = async (req, res, next) => {
   try {
     if (req.userRole !== "admin") {
-      res.status(401).send("You do not have permission to ban a user");
+      res.status(403).send("You do not have permission to ban a user");
       return;
     }
 
@@ -1789,7 +1840,7 @@ export const buyItems = async (req, res, next) => {
 export const unbanUser = async (req, res, next) => {
   try {
     if (req.userRole !== "admin") {
-      res.status(401).send("You do not have permission to unban a user");
+      res.status(403).send("You do not have permission to unban a user");
       return;
     }
 
@@ -1817,7 +1868,7 @@ export const unbanUser = async (req, res, next) => {
 export const setUserRole = async (req, res, next) => {
   try {
     if (!isAdmin(req.userRole)) {
-      res.status(401).send("You do not have permission to change user roles");
+      res.status(403).send("You do not have permission to change user roles");
       return;
     }
 
@@ -1867,7 +1918,7 @@ export const setUserRole = async (req, res, next) => {
 export const issueWarning = async (req, res, next) => {
   try {
     if (!canModerate(req.userRole)) {
-      res.status(401).send("You do not have permission to warn users");
+      res.status(403).send("You do not have permission to warn users");
       return;
     }
     const reason = String(req.body?.reason ?? "").trim().slice(0, 2000);
@@ -1906,7 +1957,7 @@ export const issueWarning = async (req, res, next) => {
 export const resolveWarning = async (req, res, next) => {
   try {
     if (!canModerate(req.userRole)) {
-      res.status(401).send("You do not have permission to resolve warnings");
+      res.status(403).send("You do not have permission to resolve warnings");
       return;
     }
     const { warningId } = req.params;
@@ -2052,7 +2103,7 @@ export const enableTotp = async (req, res, next) => {
       }
 
       const backupCodes = [...Array(10)].map(() =>
-        crypto.randomBytes(32).toString("hex").slice(0, 10),
+        crypto.randomBytes(10).toString("hex"),
       );
 
       await User.findOneAndUpdate(
@@ -2090,9 +2141,27 @@ export const disableTotp = async (req, res, next) => {
         window: 1,
       });
 
+      // Allow a single-use backup code as fallback so losing the
+      // authenticator does not permanently lock the account.
       if (!validToken) {
-        res.status(400).send("Invalid TOTP code");
-        return;
+        const code = typeof req.body.token === "string" ? req.body.token : "";
+        const consumed =
+          (code &&
+            (await User.findOneAndUpdate(
+              { _id: req.userId, "totp.backup": hashBackupCode(code) },
+              { $pull: { "totp.backup": hashBackupCode(code) } },
+            ))) ||
+          (!isBackupCodeHash(code) &&
+            code &&
+            (await User.findOneAndUpdate(
+              { _id: req.userId, "totp.backup": code },
+              { $pull: { "totp.backup": code } },
+            )));
+        if (!consumed) {
+          recordTotpFailure(req.userId);
+          res.status(400).send("Invalid TOTP code");
+          return;
+        }
       }
 
       await User.findOneAndUpdate(

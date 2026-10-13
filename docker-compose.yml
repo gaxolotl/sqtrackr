@@ -1,7 +1,7 @@
 version: "3.9"
 services:
   traefik:
-    image: "traefik:v2.5"
+    image: "traefik:v3.3"
     container_name: "sq_traefik"
     command:
       # Dashboard/API listener. Disabled by default in production; set
@@ -38,7 +38,7 @@ services:
 #      - ./nginx.conf:/etc/nginx/nginx.conf
   database:
     container_name: sq_mongodb
-    image: mongo:6.0
+    image: mongo:7.0
     ports:
       - "127.0.0.1:27017:27017"
     volumes:
@@ -66,6 +66,7 @@ services:
       - type: bind
         source: ./config.js
         target: /sqtracker/config.js
+        read_only: true
     depends_on:
       - database
   client:
@@ -77,6 +78,7 @@ services:
       - type: bind
         source: ./config.js
         target: /sqtracker/config.js
+        read_only: true
       # - ./favicon.png:/sqtracker/public/favicon.png
       # - ./favicon.ico:/sqtracker/public/favicon.ico
     depends_on:

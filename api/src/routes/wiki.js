@@ -1,4 +1,5 @@
 import express from "express";
+import net from "net";
 import ratelimit from "express-rate-limit";
 import { hasValidServerSecret } from "../middleware/auth.js";
 import {
@@ -13,17 +14,22 @@ const router = express.Router();
 const limiter = ratelimit({
   windowMs: 1000 * 60,
   max: 120,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
   keyGenerator: (req) => {
+    const forwarded = req.headers["x-forwarded-for"];
     if (
-      req.headers["x-forwarded-for"] &&
+      typeof forwarded === "string" &&
+      forwarded &&
       hasValidServerSecret(req)
     ) {
-      return req.headers["x-forwarded-for"].split(",")[0];
+      const first = forwarded.split(",")[0].trim();
+      if (first && net.isIP(first)) return first;
     }
     return req.ip;
   },
   skip: (req) => {
-    return process.env.NODE_ENV !== "production" || req.method === "OPTIONS";
+    return req.method === "OPTIONS";
   },
 });
 

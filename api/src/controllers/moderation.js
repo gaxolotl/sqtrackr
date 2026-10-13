@@ -58,7 +58,7 @@ export const createReport = async (req, res, next) => {
 export const fetchReport = async (req, res, next) => {
   try {
     if (!canModerate(req.userRole)) {
-      res.status(401).send("You do not have permission to view a report");
+      res.status(403).send("You do not have permission to view a report");
       return;
     }
 
@@ -98,7 +98,7 @@ const listReports = (solved) => async (req, res, next) => {
   const scanLimit = 200;
   try {
     if (!canModerate(req.userRole)) {
-      res.status(401).send("You do not have permission to view reports");
+      res.status(403).send("You do not have permission to view reports");
       return;
     }
 
@@ -190,7 +190,7 @@ export const getSolvedReports = listReports(true);
 export const setReportResolved = async (req, res, next) => {
   try {
     if (!canModerate(req.userRole)) {
-      res.status(401).send("You do not have permission to resolve a report");
+      res.status(403).send("You do not have permission to resolve a report");
       return;
     }
 
@@ -220,7 +220,7 @@ export const setReportResolved = async (req, res, next) => {
 export const resolveManyReports = async (req, res, next) => {
   try {
     if (!canModerate(req.userRole)) {
-      res.status(401).send("You do not have permission to resolve reports");
+      res.status(403).send("You do not have permission to resolve reports");
       return;
     }
     const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
@@ -257,7 +257,7 @@ export const resolveManyReports = async (req, res, next) => {
 export const getQueueCounts = async (req, res, next) => {
   try {
     if (!canModerate(req.userRole)) {
-      res.status(401).send("You do not have permission to view queues");
+      res.status(403).send("You do not have permission to view queues");
       return;
     }
     const [pendingSubmissions, openReports] = await Promise.all([
@@ -276,7 +276,7 @@ export const getQueueCounts = async (req, res, next) => {
 export const updateReport = async (req, res, next) => {
   try {
     if (!canModerate(req.userRole)) {
-      res.status(401).send("You do not have permission to edit a report");
+      res.status(403).send("You do not have permission to edit a report");
       return;
     }
 
@@ -329,7 +329,7 @@ export const updateReport = async (req, res, next) => {
 export const deleteReport = async (req, res, next) => {
   try {
     if (!canModerate(req.userRole)) {
-      res.status(401).send("You do not have permission to delete a report");
+      res.status(403).send("You do not have permission to delete a report");
       return;
     }
 
@@ -449,7 +449,7 @@ export const listMembers = async (req, res, next) => {
 export const getStats = (tracker) => async (req, res, next) => {
   try {
     if (req.userRole !== "admin") {
-      res.status(401).send("You do not have permission to view tracker stats");
+      res.status(403).send("You do not have permission to view tracker stats");
       return;
     }
 
@@ -464,7 +464,7 @@ export const refreshStats = (tracker) => async (req, res, next) => {
   try {
     if (req.userRole !== "admin") {
       res
-        .status(401)
+        .status(403)
         .send("You do not have permission to refresh tracker stats");
       return;
     }
@@ -488,7 +488,7 @@ export const refreshStats = (tracker) => async (req, res, next) => {
 export const listTorrentPeers = (tracker) => async (req, res, next) => {
   try {
     if (req.userRole !== "admin") {
-      res.status(401).send("You do not have permission to view peers");
+      res.status(403).send("You do not have permission to view peers");
       return;
     }
 
@@ -587,7 +587,7 @@ export const listTorrentPeers = (tracker) => async (req, res, next) => {
 export const listCheatLog = async (req, res, next) => {
   try {
     if (!canModerate(req.userRole)) {
-      res.status(401).send("You do not have permission to view the cheat log");
+      res.status(403).send("You do not have permission to view the cheat log");
       return;
     }
 
@@ -631,7 +631,7 @@ export const listCheatLog = async (req, res, next) => {
 export const listAuditLog = async (req, res, next) => {
   try {
     if (!canModerate(req.userRole)) {
-      res.status(401).send("You do not have permission to view the audit log");
+      res.status(403).send("You do not have permission to view the audit log");
       return;
     }
 

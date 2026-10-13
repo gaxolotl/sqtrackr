@@ -49,21 +49,26 @@ async function loadTrackerConfig() {
   return FALLBACK_TRACKER_CONFIG;
 }
 
+function isHexColor(value: unknown): value is string {
+  return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value);
+}
+
 function configStyles(config: TrackerConfig) {
   const theme = config.customTheme ?? {};
+  const primary = isHexColor(theme.primary) ? theme.primary : undefined;
   return {
-    ...(theme.primary
+    ...(primary
       ? {
-          "--accent": theme.primary,
-          "--accent-hover": theme.primary,
-          "--accent-soft": `color-mix(in srgb, ${theme.primary} 12%, transparent)`,
+          "--accent": primary,
+          "--accent-hover": primary,
+          "--accent-soft": `color-mix(in srgb, ${primary} 12%, transparent)`,
         }
       : {}),
-    ...(theme.background ? { "--page": theme.background } : {}),
-    ...(theme.sidebar ? { "--sidebar": theme.sidebar } : {}),
-    ...(theme.border ? { "--border": theme.border } : {}),
-    ...(theme.text ? { "--text": theme.text } : {}),
-    ...(theme.grey ? { "--muted": theme.grey } : {}),
+    ...(isHexColor(theme.background) ? { "--page": theme.background } : {}),
+    ...(isHexColor(theme.sidebar) ? { "--sidebar": theme.sidebar } : {}),
+    ...(isHexColor(theme.border) ? { "--border": theme.border } : {}),
+    ...(isHexColor(theme.text) ? { "--text": theme.text } : {}),
+    ...(isHexColor(theme.grey) ? { "--muted": theme.grey } : {}),
     "--content-max-width": `${Math.min(
       2560,
       Math.max(640, config.contentMaxWidth),

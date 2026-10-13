@@ -1,4 +1,3 @@
-import bcrypt from "bcrypt";
 import crypto from "crypto";
 import User from "../schema/user.js";
 import Torrent from "../schema/torrent.js";
@@ -38,12 +37,10 @@ const getTorrentXml = (torrent, userId) => {
 };
 
 export const rssFeed = (tracker) => async (req, res, next) => {
-  const { username, password } = req.cookies;
   const { query, token } = req.query;
 
   try {
     let user;
-    let usedCookieFallback = false;
     if (typeof token === "string" && token) {
       // Token-first: the per-user token (?token=) is the primary path
       // because feed readers cannot use the browser's local-storage JWT.
@@ -67,19 +64,9 @@ export const rssFeed = (tracker) => async (req, res, next) => {
           { $set: { rssTokenHash: tokenHash }, $unset: { rssToken: 1 } },
         ).catch(() => {});
       }
-    } else if (
-      typeof username === "string" &&
-      typeof password === "string" &&
-      username &&
-      password
-    ) {
-      // DEPRECATED: username+password cookie fallback. The per-user token
-      // (?token=) is the primary path because feed readers cannot use the
-      // browser's local-storage JWT. This branch still works so existing
-      // clients do not break, but callers should migrate to token URLs.
-      user = await User.findOne({ username }, { password: 1, uid: 1, banned: 1 }).lean();
-      if (user && !(await bcrypt.compare(password, user.password))) user = null;
-      usedCookieFallback = !!user;
+    } else {
+      res.status(401).send("Incorrect login details");
+      return;
     }
 
     if (!user || user.banned) {
@@ -123,7 +110,6 @@ export const rssFeed = (tracker) => async (req, res, next) => {
       .join("\n");
 
     res.setHeader("Content-Type", "application/rss+xml; charset=utf-8");
-    if (usedCookieFallback) res.setHeader("Deprecation", "true");
     res.status(200).send(`<?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0">
   <channel>
