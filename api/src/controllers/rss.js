@@ -110,6 +110,7 @@ export const rssFeed = (tracker) => async (req, res, next) => {
       .join("\n");
 
     res.setHeader("Content-Type", "application/rss+xml; charset=utf-8");
+    res.setHeader("Cache-Control", "private, no-store");
     res.status(200).send(`<?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0">
   <channel>

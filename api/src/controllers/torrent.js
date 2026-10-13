@@ -110,7 +110,7 @@ export const embellishTorrentsWithTrackerScrape = async (tracker, torrents) => {
       };
     });
   } catch (e) {
-    console.error("[DEBUG] Error: could not embellish torrents from tracker");
+    console.error("[sq] failed to embellish torrents from tracker:", e?.message ?? e);
     return torrents;
   }
 };
@@ -625,20 +625,20 @@ export const editTorrent = async (req, res, next) => {
       const clone = { ...torrent, name };
       createNGrams(clone, ["name"]);
 
-      await Torrent.findOneAndUpdate(
-        { infoHash },
-        {
-          $set: {
-            name,
-            name_fuzzy: clone.name_fuzzy,
-            type,
-            source,
-            description,
-            tags,
-          },
-          mediaInfo: mediaInfo || undefined,
+      const update = {
+        $set: {
+          name,
+          name_fuzzy: clone.name_fuzzy,
+          type,
+          source,
+          description,
+          tags,
+          ...(mediaInfo ? { mediaInfo } : {}),
         },
-      );
+        ...(mediaInfo ? {} : { $unset: { mediaInfo: 1 } }),
+      };
+
+      await Torrent.findOneAndUpdate({ infoHash }, update);
 
       res.sendStatus(200);
     } catch (e) {
@@ -658,9 +658,12 @@ export const downloadTorrent = async (req, res, next) => {
       return;
     }
 
-    const user = await User.findOne({ uid: userId }, { uid: 1 }).lean();
+    const user = await User.findOne(
+      { uid: userId },
+      { uid: 1, banned: 1 },
+    ).lean();
 
-    if (!user) {
+    if (!user || user.banned) {
       res.status(404).send("Torrent does not exist");
       return;
     }
@@ -1217,7 +1220,10 @@ export const listAll = async (req, res, next) => {
 export const searchTorrents = (tracker) => async (req, res, next) => {
   const { query, category, source, tag, page, sort } = req.query;
   try {
-    const safePage = Math.max(0, parseInt(page, 10) || 0);
+    const safePage = Math.min(
+      Math.max(0, parseInt(page, 10) || 0),
+      100,
+    );
     const torrents = await getTorrentsPage({
       skip: safePage * 25,
       limit: 25,
@@ -1330,13 +1336,12 @@ export const addVote = async (req, res, next) => {
         { infoHash },
         {
           $addToSet: {
-            [vote === "up" ? "upvotes" : "downvotes"]: mongoose.Types.ObjectId(
-              req.userId,
-            ),
+            [vote === "up" ? "upvotes" : "downvotes"]:
+              new mongoose.Types.ObjectId(req.userId),
           },
           $pull: {
             [vote === "down" ? "upvotes" : "downvotes"]:
-              mongoose.Types.ObjectId(req.userId),
+              new mongoose.Types.ObjectId(req.userId),
           },
         },
       );
@@ -1364,15 +1369,14 @@ export const removeVote = async (req, res, next) => {
         { infoHash },
         {
           $pull: {
-            [vote === "up" ? "upvotes" : "downvotes"]: mongoose.Types.ObjectId(
-              req.userId,
-            ),
+            [vote === "up" ? "upvotes" : "downvotes"]:
+              new mongoose.Types.ObjectId(req.userId),
           },
         },
       );
       res.sendStatus(200);
     } else {
-      res.status(400).send("Vote must be one of (up, down)");
+      res.status(400).send("Vote must be one of up, down");
     }
   } catch (e) {
     next(e);

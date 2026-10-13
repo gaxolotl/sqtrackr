@@ -49,8 +49,7 @@ const metadataLimiter = ratelimit({
   windowMs: 1000 * 60,
   max: 20,
   keyGenerator: (req) => req.userId?.toString() ?? req.ip,
-  skip: (req) =>
-    process.env.NODE_ENV !== "production" || req.method === "OPTIONS",
+  skip: (req) => req.method === "OPTIONS",
 });
 
 export default (tracker) => {

@@ -147,7 +147,7 @@ export const getAnnouncements = async (req, res, next) => {
   try {
     let { count } = req.query;
     let { page } = req.params;
-    page = Math.max(0, parseInt(page, 10) || 0);
+    page = Math.min(Math.max(0, parseInt(page, 10) || 0), 100);
     count = parseInt(count, 10) || 25;
     count = Math.min(Math.max(count, 1), 100);
 
@@ -292,7 +292,11 @@ export const deleteAnnouncement = async (req, res, next) => {
       return;
     }
 
-    await Announcement.deleteOne({ slug: req.params.slug });
+    const result = await Announcement.deleteOne({ slug: req.params.slug });
+    if (result.deletedCount === 0) {
+      res.status(404).send("Announcement could not be found");
+      return;
+    }
     res.sendStatus(200);
   } catch (e) {
     next(e);
@@ -311,10 +315,14 @@ export const pinAnnouncement = async (req, res, next) => {
       res.status(404).send("Announcement does not exist");
       return;
     }
-    await Announcement.findOneAndUpdate(
+    const updated = await Announcement.findOneAndUpdate(
       { _id: req.params.announcementId },
-      { $set: { pinned: req.params.action === "pin" } }
+      { $set: { pinned: req.params.action === "pin" } },
     );
+    if (!updated) {
+      res.status(404).send("Announcement does not exist");
+      return;
+    }
     res.sendStatus(200);
   } catch (e) {
     next(e);
@@ -361,9 +369,14 @@ export const editAnnouncement = async (req, res, next) => {
             allowComments: !!req.body.allowComments,
             updated: Date.now(),
           },
-        }
+        },
+        { new: true },
       );
 
+      if (!announcement) {
+        res.status(404).send("Announcement does not exist");
+        return;
+      }
       res.send(announcement.slug);
   } catch (e) {
     next(e);

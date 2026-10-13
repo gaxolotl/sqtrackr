@@ -61,6 +61,11 @@ export const createRequest = async (req, res, next) => {
       await request.save();
       res.send({ index });
   } catch (e) {
+    if (e?.code === 11000) {
+      // Concurrent creates raced on the same index; client can retry.
+      res.status(409).send("Request could not be created, please retry");
+      return;
+    }
     next(e);
   }
 };
@@ -69,7 +74,7 @@ export const getRequests = async (req, res, next) => {
   const pageSize = 25;
   try {
     let { page } = req.params;
-    page = Math.max(0, parseInt(page, 10) || 0);
+    page = Math.min(Math.max(0, parseInt(page, 10) || 0), 100);
 
     const requests = await Request.aggregate([
       {
@@ -285,6 +290,15 @@ export const topUpRequest = async (req, res, next) => {
       { new: true },
     ).lean();
 
+    if (!updated) {
+      await User.findOneAndUpdate(
+        { _id: req.userId },
+        { $inc: { bonusPoints: amount } },
+      ).catch(() => {});
+      res.status(404).send("Request does not exist");
+      return;
+    }
+
     res.status(200).send({ bounty: updated.bounty });
   } catch (e) {
     next(e);
@@ -476,6 +490,14 @@ export const acceptCandidate = async (req, res, next) => {
         return;
       }
 
+      const rewardPerFill = Number(
+        process.env.SQ_BP_EARNED_PER_FILLED_REQUEST ?? 0,
+      );
+      if (!Number.isFinite(rewardPerFill)) {
+        res.status(500).send("Bonus reward is misconfigured");
+        return;
+      }
+
       const fulfilledRequest = await Request.findOneAndUpdate(
         { _id: requestId, fulfilledBy: null },
         { $set: { fulfilledBy: torrent._id, bounty: 0 } },
@@ -491,7 +513,7 @@ export const acceptCandidate = async (req, res, next) => {
         {
           $inc: {
             bonusPoints:
-              process.env.SQ_BP_EARNED_PER_FILLED_REQUEST *
+              rewardPerFill *
                 (torrent.uploadedBy.toString() ===
                 candidate.suggestedBy.toString()
                   ? 2

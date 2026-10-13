@@ -9,12 +9,10 @@ export const createGroup = async (torrents) => {
   });
   await group.save();
 
-  for (const torrent of torrents) {
-    await Torrent.findOneAndUpdate(
-      { _id: torrent._id },
-      { $set: { group: group._id } }
-    );
-  }
+  await Torrent.updateMany(
+    { _id: { $in: torrents.map((t) => t._id) } },
+    { $set: { group: group._id } },
+  );
 
   return group._id;
 };
@@ -22,13 +20,13 @@ export const createGroup = async (torrents) => {
 export const addToGroup = async (groupId, infoHash) => {
   const group = await Group.findOne({ _id: groupId }).lean();
 
-  if (!group) throw "Group does not exist";
+  if (!group) throw new Error("Group does not exist");
 
   const torrent = await Torrent.findOne({
     infoHash,
   }).lean();
 
-  if (!torrent) throw "Torrent does not exist";
+  if (!torrent) throw new Error("Torrent does not exist");
 
   await Group.findOneAndUpdate(
     { _id: groupId },
@@ -39,18 +37,18 @@ export const addToGroup = async (groupId, infoHash) => {
 export const removeFromGroup = async (groupId, infoHash) => {
   const group = await Group.findOne({ _id: groupId }).lean();
 
-  if (!group) throw "Group does not exist";
+  if (!group) throw new Error("Group does not exist");
 
   const torrent = await Torrent.findOne({
     infoHash,
   }).lean();
 
-  if (!torrent) throw "Torrent does not exist";
+  if (!torrent) throw new Error("Torrent does not exist");
 
   if (
     !group.torrents.map((id) => id.toString()).includes(torrent._id.toString())
   )
-    throw "Torrent is not a member of group";
+    throw new Error("Torrent is not a member of group");
 
   if (group.torrents.length > 1) {
     await Group.findOneAndUpdate(

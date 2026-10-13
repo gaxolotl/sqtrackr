@@ -108,7 +108,12 @@ const logAnomalyThrottled = async ({
 };
 
 const handleAnnounce = async (req, res) => {
-  const announceUid = req.originalUrl.split("?")[0].split("/")[2];
+  // Express route params are authoritative; originalUrl splitting breaks for
+  // legacy /sq/*/announce (segment [2] is "sq"). Fall back to parsing only
+  // when params are unavailable (e.g. direct tracker handler tests).
+  const announceUid =
+    req.params?.uid ??
+    req.originalUrl.split("?")[0].split("/").filter(Boolean).pop();
 
   const user = await User.findOne(
     { uid: announceUid },
@@ -148,7 +153,13 @@ const handleAnnounce = async (req, res) => {
 
   // Anti-cheat: deny announces from banned clients (peer-ID prefix match).
   const peerId = params.peer_id ?? "";
-  const clientBlacklist = JSON.parse(process.env.SQ_CLIENT_BLACKLIST ?? "[]");
+  let clientBlacklist = [];
+  try {
+    const parsed = JSON.parse(process.env.SQ_CLIENT_BLACKLIST ?? "[]");
+    if (Array.isArray(parsed)) clientBlacklist = parsed;
+  } catch {
+    clientBlacklist = [];
+  }
   if (clientBlacklist.some((prefix) => prefix && peerId.startsWith(prefix))) {
     const response = bencode.encode({
       "failure reason": "Announce denied: Your client is banned.",
@@ -172,8 +183,10 @@ const handleAnnounce = async (req, res) => {
     return;
   }
 
-  const { ratio } = await getUserRatio(user._id);
-  const hitnruns = await getUserHitNRuns(user._id);
+  const [{ ratio }, hitnruns] = await Promise.all([
+    getUserRatio(user._id),
+    getUserHitNRuns(user._id),
+  ]);
 
   // if users ratio is below the minimum threshold, and they are trying to download, deny announce
   if (
@@ -245,7 +258,7 @@ const handleAnnounce = async (req, res) => {
     event: params.event,
   });
   for (const anomaly of anomalies) {
-    await logAnomalyThrottled({
+    void logAnomalyThrottled({
       userId: user._id,
       infoHash,
       peerId,

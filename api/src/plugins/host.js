@@ -24,8 +24,7 @@ const managementLimiter = ratelimit({
   windowMs: 60 * 1000,
   max: 120,
   keyGenerator: (req) => req.userId?.toString() ?? req.ip,
-  skip: (req) =>
-    process.env.NODE_ENV !== "production" || req.method === "OPTIONS",
+  skip: (req) => req.method === "OPTIONS",
 });
 
 const wrapHandler = (handler) => {

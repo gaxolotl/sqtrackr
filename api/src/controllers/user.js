@@ -488,6 +488,22 @@ export const register = (mail) => async (req, res, next) => {
         res.status(400).send("Could not create account with provided details");
       }
     } catch (e) {
+      if (e?.code === 11000) {
+        if (inviteClaimed && !accountCreated) {
+          await Invite.updateOne(
+            { _id: invite._id },
+            { $set: { claimed: false } },
+          ).catch(() => {});
+          if (legacyInviteDebited) {
+            await User.updateOne(
+              { _id: invite.invitingUser },
+              { $inc: { remainingInvites: 1 } },
+            ).catch(() => {});
+          }
+        }
+        res.status(400).send("Could not create account with provided details");
+        return;
+      }
       if (inviteClaimed && !accountCreated) {
         await Invite.updateOne(
           { _id: invite._id },

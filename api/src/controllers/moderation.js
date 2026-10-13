@@ -103,7 +103,7 @@ const listReports = (solved) => async (req, res, next) => {
     }
 
     let { page } = req.params;
-    page = Math.max(0, parseInt(page, 10) || 0);
+    page = Math.min(Math.max(0, parseInt(page, 10) || 0), 100);
     const query =
       typeof req.query.q === "string" ? req.query.q.slice(0, 100) : "";
     const reports = await Report.aggregate([
@@ -352,17 +352,29 @@ export const deleteReport = async (req, res, next) => {
 };
 
 const computeTrackerStats = async (tracker) => {
-  const registeredUsers = await User.countDocuments();
-  const bannedUsers = await User.countDocuments({ banned: true });
-  const uploadedTorrents = await Torrent.countDocuments();
-  const completedDownloads = await Progress.countDocuments({ left: 0 });
-  const totalInvitesSent = await Invite.countDocuments();
-  const invitesAccepted = await Invite.countDocuments({ claimed: true });
-  const totalRequests = await Request.countDocuments({});
-  const filledRequests = await Request.countDocuments({
-    fulfilledBy: { $exists: true },
-  });
-  const totalComments = await Comment.countDocuments();
+  const [
+    registeredUsers,
+    bannedUsers,
+    uploadedTorrents,
+    completedDownloads,
+    totalInvitesSent,
+    invitesAccepted,
+    totalRequests,
+    filledRequests,
+    totalComments,
+  ] = await Promise.all([
+    User.countDocuments(),
+    User.countDocuments({ banned: true }),
+    Torrent.countDocuments(),
+    Progress.countDocuments({ left: 0 }),
+    Invite.countDocuments(),
+    Invite.countDocuments({ claimed: true }),
+    Request.countDocuments({}),
+    Request.countDocuments({
+      fulfilledBy: { $exists: true },
+    }),
+    Comment.countDocuments(),
+  ]);
 
   let activeTorrents = 0;
   let peers = 0;
@@ -401,7 +413,10 @@ export const listMembers = async (req, res, next) => {
       return;
     }
     const pageSize = 25;
-    const page = Math.max(parseInt(req.query.page, 10) || 0, 0);
+    const page = Math.min(
+      Math.max(parseInt(req.query.page, 10) || 0, 0),
+      100,
+    );
     const search =
       typeof req.query.q === "string" ? req.query.q.trim().slice(0, 100) : "";
     const role =
@@ -559,13 +574,19 @@ export const listTorrentPeers = (tracker) => async (req, res, next) => {
       });
     }
 
-    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const page = Math.min(
+      Math.max(parseInt(req.query.page, 10) || 1, 1),
+      100,
+    );
     const perPage = Math.min(
       Math.max(parseInt(req.query.perPage, 10) || 10, 1),
       100,
     );
     const start = (page - 1) * perPage;
 
+    await logAudit(req.userId, "peers.viewed", String(infoHash)).catch(
+      () => {},
+    );
     res.json({
       infoHash,
       total: peers.length,
@@ -591,7 +612,10 @@ export const listCheatLog = async (req, res, next) => {
       return;
     }
 
-    const page = Math.max(parseInt(req.params.page, 10) || 0, 0);
+    const page = Math.min(
+      Math.max(parseInt(req.params.page, 10) || 0, 0),
+      100,
+    );
     const perPage = 25;
     const reason =
       typeof req.query.reason === "string" && req.query.reason.trim()
@@ -630,12 +654,15 @@ export const listCheatLog = async (req, res, next) => {
 
 export const listAuditLog = async (req, res, next) => {
   try {
-    if (!canModerate(req.userRole)) {
+    if (req.userRole !== "admin") {
       res.status(403).send("You do not have permission to view the audit log");
       return;
     }
 
-    const page = Math.max(parseInt(req.params.page, 10) || 0, 0);
+    const page = Math.min(
+      Math.max(parseInt(req.params.page, 10) || 0, 0),
+      100,
+    );
     const perPage = 25;
     const [entries, total] = await Promise.all([
       AuditLog.find({})

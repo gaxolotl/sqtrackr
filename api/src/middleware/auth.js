@@ -56,7 +56,7 @@ const auth = async (req, res, next) => {
         }
         if (user.banned) {
           const reason = user.banReason || "none";
-          res.status(403).send(`User is banned. Reason: ${reason}`);
+          res.status(403).type("text/plain").send(`User is banned. Reason: ${reason}`);
           return;
         }
         req.userId = user._id;
@@ -97,7 +97,7 @@ const auth = async (req, res, next) => {
         if (user) {
           if (user.banned) {
             const reason = user.banReason || "none";
-            res.status(403).send(`User is banned. Reason: ${reason}`);
+            res.status(403).type("text/plain").send(`User is banned. Reason: ${reason}`);
             return;
           }
           if (

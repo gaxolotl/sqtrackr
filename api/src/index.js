@@ -73,6 +73,22 @@ mongoose.set("strictQuery", true);
 
 validateConfig(config)
   .then(async () => {
+    // Query-string secrets plus path-segment credentials: /announce/:uid
+    // carries the tracker's per-user auth credential and
+    // /torrent/download/:infoHash/:userId carries a user id, so both are
+    // redacted before anything reaches logs or Sentry.
+    const redactSensitiveQuery = (url) =>
+      url
+        ?.replace(
+          /([?&](?:token|rssToken|password|passwd|passkey|secret|api[_-]?key)=)[^&]*/gi,
+          "$1[redacted]",
+        )
+        ?.replace(/(\/announce\/)[^/?#\s]+/g, "$1[redacted]")
+        ?.replace(
+          /(\/torrent\/download\/[^/?#\s]+\/)[^/?#\s]+/g,
+          "$1[redacted]",
+        );
+
     if (process.env.SENTRY_DSN) {
       Sentry.init({
         dsn: process.env.SENTRY_DSN,
@@ -83,6 +99,16 @@ validateConfig(config)
           if (event.request?.headers) {
             delete event.request.headers.authorization;
             delete event.request.headers.cookie;
+          }
+          if (typeof event.request?.url === "string") {
+            event.request.url = redactSensitiveQuery(event.request.url);
+          }
+          if (Array.isArray(event.breadcrumbs)) {
+            for (const crumb of event.breadcrumbs) {
+              if (crumb?.data?.url && typeof crumb.data.url === "string") {
+                crumb.data.url = redactSensitiveQuery(crumb.data.url);
+              }
+            }
           }
           return event;
         },
@@ -189,22 +215,6 @@ validateConfig(config)
       }
     };
 
-    // Query-string secrets plus path-segment credentials: /announce/:uid
-    // carries the tracker's per-user auth credential and
-    // /torrent/download/:infoHash/:userId carries a user id, so both are
-    // redacted before anything reaches the logs.
-    const redactSensitiveQuery = (url) =>
-      url
-        ?.replace(
-          /([?&](?:token|rssToken|password|passwd|passkey|secret|api[_-]?key)=)[^&]*/gi,
-          "$1[redacted]",
-        )
-        ?.replace(/(\/announce\/)[^/?#\s]+/g, "$1[redacted]")
-        ?.replace(
-          /(\/torrent\/download\/[^/?#\s]+\/)[^/?#\s]+/g,
-          "$1[redacted]",
-        );
-
     app.use(
       morgan((tokens, req, res) => {
         return [
@@ -297,7 +307,8 @@ validateConfig(config)
     // Small default body limit; large uploads mount a higher limit only on
     // their own routes so login/comments/votes cannot be used for memory DoS.
     const smallJson = bodyParser.json({ limit: "100kb" });
-    const largeJson = bodyParser.json({ limit: "12mb" });
+    // 16mb covers max legit torrent payload: 10240 KB raw -> ~13.6 MB base64.
+    const largeJson = bodyParser.json({ limit: "16mb" });
     app.use((req, res, next) => {
       const largePath =
         req.path.startsWith("/torrent") ||
