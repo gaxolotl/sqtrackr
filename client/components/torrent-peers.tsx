@@ -119,7 +119,7 @@ export function TorrentPeers({ infoHash }: { infoHash: string }) {
                     </span>
                     <span className="peer-main">
                       {peer.username ? (
-                        <Link href={`/user/${peer.username}`}>
+                        <Link href={`/user/${encodeURIComponent(peer.username)}`}>
                           {peer.username}
                         </Link>
                       ) : (

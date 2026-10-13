@@ -191,6 +191,13 @@ const revokeAllUserAuth = async (userId) => {
       { userId, revoked: { $ne: true } },
       { $set: { revoked: true } },
     ).catch(() => {}),
+    // RSS feed URLs embed both the RSS token and the announce uid and live
+    // outside the browser session, so a stolen feed URL survives password
+    // changes unless it is revoked here. Clearing forces regeneration.
+    User.updateOne(
+      { _id: userId },
+      { $unset: { rssToken: 1, rssTokenHash: 1 } },
+    ).catch(() => {}),
   ]);
 };
 
@@ -539,7 +546,7 @@ export const login = async (req, res, next) => {
         }
 
         if (user.totp?.enabled) {
-          if (!req.body.totp) {
+          if (typeof req.body.totp !== "string" || !req.body.totp) {
             res.status(401).send("One-time code required");
             return;
           }
@@ -1935,6 +1942,13 @@ export const issueWarning = async (req, res, next) => {
       res.status(403).send("The primary admin account cannot be warned");
       return;
     }
+    // Role hierarchy: staff moderators cannot warn admin accounts. Only
+    // admins may warn other admins; otherwise a compromised staff account
+    // can spam warnings/notifications at administrators.
+    if (user.role === "admin" && req.userRole !== "admin") {
+      res.status(403).send("You do not have permission to warn this user");
+      return;
+    }
     const warning = await new Warning({
       userId: user._id,
       reason,
@@ -2078,7 +2092,7 @@ export const generateTotpSecret = async (req, res, next) => {
 };
 
 export const enableTotp = async (req, res, next) => {
-  if (req.body.token) {
+  if (typeof req.body.token === "string" && req.body.token) {
     try {
       if (!(await verifyCurrentPassword(req, res))) return;
       const user = await User.findOne(
@@ -2126,7 +2140,7 @@ export const enableTotp = async (req, res, next) => {
 };
 
 export const disableTotp = async (req, res, next) => {
-  if (req.body.token) {
+  if (typeof req.body.token === "string" && req.body.token) {
     try {
       if (!(await verifyCurrentPassword(req, res))) return;
       const user = await User.findOne(

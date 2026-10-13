@@ -22,7 +22,7 @@ export const createWiki = async (req, res, next) => {
     try {
       if (req.userRole !== "admin") {
         res
-          .status(401)
+          .status(403)
           .send("You do not have permission to create a wiki page");
         return;
       }
@@ -155,7 +155,7 @@ export const getWiki = async (req, res, next) => {
 export const deleteWiki = async (req, res, next) => {
   try {
     if (req.userRole !== "admin") {
-      res.status(401).send("You do not have permission to delete a wiki page");
+      res.status(403).send("You do not have permission to delete a wiki page");
       return;
     }
 
@@ -173,7 +173,7 @@ export const updateWiki = async (req, res, next) => {
     try {
       if (req.userRole !== "admin") {
         res
-          .status(401)
+          .status(403)
           .send("You do not have permission to create a wiki page");
         return;
       }

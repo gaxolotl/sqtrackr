@@ -385,7 +385,12 @@ validateConfig(config)
       rssFeed(tracker)(req, res, next);
     });
 
-    // torrent file download (can download without auth, will not be able to announce)
+    // torrent file download: pre-auth by design so RSS readers and
+    // BitTorrent clients (which cannot use the browser JWT) can fetch via
+    // the per-user announce uid in the path. That uid is a bearer
+    // credential: anyone holding it can download as that user and announce
+    // as them. Uids rotate only via POST /account/rotate-uid, and RSS
+    // tokens are revoked on password change/sign-out-everywhere.
     app.get("/torrent/download/:infoHash/:userId", searchLimiter, downloadTorrent);
 
     const whenPublicViewingEnabled = (handler) => (req, res, next) => {

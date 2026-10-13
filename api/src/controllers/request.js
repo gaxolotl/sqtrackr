@@ -3,6 +3,7 @@ import Request from "../schema/request.js";
 import Comment from "../schema/comment.js";
 import Torrent from "../schema/torrent.js";
 import User from "../schema/user.js";
+import { canModerate } from "../utils/roles.js";
 import {
   getContentLimits,
   validateContentText,
@@ -301,8 +302,11 @@ export const deleteRequest = async (req, res, next) => {
       return;
     }
 
-    if (req.userId.toString() !== request.createdBy.toString()) {
-      res.status(401).send("You do not have permission to delete that request");
+    if (
+      req.userId.toString() !== request.createdBy.toString() &&
+      !canModerate(req.userRole)
+    ) {
+      res.status(403).send("You do not have permission to delete that request");
       return;
     }
 
@@ -442,7 +446,7 @@ export const acceptCandidate = async (req, res, next) => {
 
       if (req.userId.toString() !== request.createdBy.toString()) {
         res
-          .status(401)
+          .status(403)
           .send("You do not have permission to accept that suggestion");
         return;
       }

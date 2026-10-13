@@ -11,7 +11,7 @@ export const createAnnouncement = async (req, res, next) => {
   try {
     if (req.userRole !== "admin") {
       res
-        .status(401)
+        .status(403)
         .send("You do not have permission to create an announcement");
       return;
     }
@@ -287,7 +287,7 @@ export const deleteAnnouncement = async (req, res, next) => {
   try {
     if (req.userRole !== "admin") {
       res
-        .status(401)
+        .status(403)
         .send("You do not have permission to delete an announcement");
       return;
     }
@@ -303,7 +303,7 @@ export const pinAnnouncement = async (req, res, next) => {
   try {
     if (req.userRole !== "admin") {
       res
-        .status(401)
+        .status(403)
         .send("You do not have permission to pin an announcement");
       return;
     }
@@ -325,7 +325,7 @@ export const editAnnouncement = async (req, res, next) => {
   try {
       if (req.userRole !== "admin") {
         res
-          .status(401)
+          .status(403)
           .send("You do not have permission to edit an announcement");
         return;
       }

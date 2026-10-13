@@ -161,6 +161,13 @@ const auth = async (req, res, next) => {
     req.headers["x-sq-public-access"] === "true" &&
     hasValidServerSecret(req)
   ) {
+    // Server-side public reads only: writes with an undefined identity would
+    // persist owner-less records, so only safe idempotent methods pass here.
+    // Authenticated writes must use a real JWT/API token via Authorization.
+    if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS") {
+      res.status(401).send("Invalid authentication token");
+      return;
+    }
     next();
   } else {
     res.sendStatus(401);

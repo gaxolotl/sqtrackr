@@ -301,7 +301,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div className="sidebar-session-actions">
                 <Link
                   className={`nav-link ${isActive(`/user/${session.username}`) ? "active" : ""}`}
-                  href={`/user/${session.username}`}
+                  href={`/user/${encodeURIComponent(session.username)}`}
                   onClick={() => setMenuOpen(false)}
                 >
                   <span>{t("profile")}</span>

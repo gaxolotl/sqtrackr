@@ -31,7 +31,7 @@ export function LinkPicker({
     const label =
       window.prompt("Link text:", trimmed.split("/").pop() || trimmed) ??
       trimmed;
-    const text = label.trim() || trimmed;
+    const text = (label.trim() || trimmed).replace(/[\[\]]/g, "").slice(0, 200) || trimmed;
     onInsert(
       IMAGE_PATTERN.test(trimmed)
         ? `![${text}](${trimmed})`

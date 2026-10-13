@@ -28,8 +28,14 @@ export const viewport: Viewport = {
 };
 
 async function loadTrackerConfig() {
+  // Mirror client/lib/api.ts: never bake a localhost fallback into a
+  // production build. Server-side metadata fetch needs an absolute URL, so
+  // in production without NEXT_PUBLIC_API_URL fall back to the docker
+  // service name instead of localhost.
+  const configured = (process.env.NEXT_PUBLIC_API_URL ?? "").trim();
   const apiUrl = (
-    process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001"
+    configured ||
+    (process.env.NODE_ENV === "production" ? "http://api:3001" : "http://localhost:3001")
   ).replace(/\/+$/, "");
 
   for (let attempt = 0; attempt < 8; attempt += 1) {

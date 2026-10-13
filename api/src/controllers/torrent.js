@@ -56,6 +56,21 @@ const formatTag = (tag) =>
 const isValidInfoHash = (value) =>
   typeof value === "string" && /^[a-f0-9]{40}$/i.test(value);
 
+const isValidAnnounceUid = (value) =>
+  typeof value === "string" && /^[a-f0-9]{32}$/i.test(value);
+
+const isSafePosterUrl = (value) => {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 500) return false;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
 const decodeTorrentPayload = (payload, maxSizeKb, res) => {
   if (typeof payload !== "string" || !payload) {
     res.status(400).send("A .torrent file is required");
@@ -399,8 +414,7 @@ export const uploadTorrent = async (req, res, next) => {
         infoHash,
         binary: req.body.torrent,
         poster:
-          typeof req.body.poster === "string" &&
-          /^https?:\/\/.{1,500}$/i.test(req.body.poster.trim())
+          isSafePosterUrl(req.body.poster)
             ? req.body.poster.trim().slice(0, 500)
             : undefined,
         uploadedBy: req.userId,
@@ -639,7 +653,7 @@ export const downloadTorrent = async (req, res, next) => {
   try {
     const { infoHash, userId } = req.params;
 
-    if (!isValidInfoHash(infoHash)) {
+    if (!isValidInfoHash(infoHash) || !isValidAnnounceUid(userId)) {
       res.status(404).send("Torrent does not exist");
       return;
     }
@@ -1369,7 +1383,7 @@ export const toggleFreeleech = async (req, res, next) => {
   const { infoHash } = req.params;
   try {
     if (req.userRole !== "admin") {
-      res.status(401).send("You do not have permission to toggle freeleech");
+      res.status(403).send("You do not have permission to toggle freeleech");
       return;
     }
 
