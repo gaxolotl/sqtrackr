@@ -76,11 +76,22 @@ export type PluginSlotContribution = PluginAudience & {
   component: ComponentType<PluginSlotProps>;
 };
 
+export type PluginTabProps = {
+  context: unknown;
+};
+
+export type PluginTabContribution = PluginAudience & {
+  slot: string;
+  label: string;
+  component: ComponentType<PluginTabProps>;
+};
+
 export type ClientPlugin = {
   manifest: PluginManifest;
   navigation?: readonly PluginNavigationContribution[];
   pages?: readonly PluginPageContribution[];
   slots?: readonly PluginSlotContribution[];
+  tabs?: readonly PluginTabContribution[];
 };
 
 export function defineClientPlugin<const Plugin extends ClientPlugin>(

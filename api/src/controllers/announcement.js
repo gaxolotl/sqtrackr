@@ -308,7 +308,7 @@ export const pinAnnouncement = async (req, res, next) => {
       return;
     }
     if (!mongoose.isValidObjectId(req.params.announcementId)) {
-      res.status(400).send("Invalid announcement ID");
+      res.status(404).send("Announcement does not exist");
       return;
     }
     await Announcement.findOneAndUpdate(
@@ -346,6 +346,11 @@ export const editAnnouncement = async (req, res, next) => {
       );
       if (body === null) return;
 
+      if (!mongoose.isValidObjectId(req.params.announcementId)) {
+        res.status(404).send("Announcement does not exist");
+        return;
+      }
+
       const announcement = await Announcement.findOneAndUpdate(
         { _id: req.params.announcementId },
         {
@@ -375,6 +380,10 @@ export const addComment = async (req, res, next) => {
         { trim: false },
       );
       if (commentText === null) return;
+      if (!mongoose.isValidObjectId(req.params.announcementId)) {
+        res.status(404).send("Announcement does not exist");
+        return;
+      }
       const announcement = await Announcement.findOne({
         _id: req.params.announcementId,
       }).lean();

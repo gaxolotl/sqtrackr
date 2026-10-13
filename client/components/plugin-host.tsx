@@ -8,6 +8,7 @@ import type {
   PluginPageContribution,
   PluginRole,
   PluginSlotContribution,
+  PluginTabContribution,
 } from "@sqtrackr/plugin-sdk/client";
 import {
   Component,
@@ -44,6 +45,12 @@ type ResolvedPluginPage = {
   pluginName: string;
 };
 
+export type ResolvedPluginTab = {
+  contribution: PluginTabContribution;
+  pluginId: string;
+  pluginName: string;
+};
+
 type PluginHostValue = {
   enabledManifests: readonly PluginManifest[];
   error: string;
@@ -59,6 +66,7 @@ type PluginHostValue = {
     pluginId: string;
     pluginName: string;
   }[];
+  tabs: (slot: string) => readonly ResolvedPluginTab[];
 };
 
 const PluginHostContext = createContext<PluginHostValue | null>(null);
@@ -221,6 +229,21 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
     );
   }
 
+  function tabs(slot: string): readonly ResolvedPluginTab[] {
+    return enabledPlugins.flatMap(({ client, manifest }) =>
+      (client.tabs ?? [])
+        .filter(
+          (contribution) =>
+            contribution.slot === slot && canShow(contribution, session),
+        )
+        .map((contribution) => ({
+          contribution,
+          pluginId: manifest.id,
+          pluginName: manifest.name,
+        })),
+    );
+  }
+
   const navigation = enabledPlugins.flatMap(({ client, manifest }) =>
     (client.navigation ?? [])
       .filter((contribution) => canShow(contribution, session))
@@ -241,6 +264,7 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
         resolvePage,
         resolveTitle,
         slots,
+        tabs,
       }}
     >
       {children}
@@ -297,6 +321,21 @@ export function PluginSlot({
         },
       )}
     </>
+  );
+}
+
+export function PluginTab({
+  tab,
+  context,
+}: {
+  tab: ResolvedPluginTab;
+  context: unknown;
+}) {
+  const TabComponent = tab.contribution.component;
+  return (
+    <PluginErrorBoundary pluginId={tab.pluginId} pluginName={tab.pluginName}>
+      <TabComponent context={context} />
+    </PluginErrorBoundary>
   );
 }
 

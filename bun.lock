@@ -15,8 +15,10 @@
         "@sentry/node": "^7.36.0",
         "@sentry/tracing": "^7.120.4",
         "@sqtrackr/plugin-collages": "workspace:*",
+        "@sqtrackr/plugin-member-ranks": "workspace:*",
         "@sqtrackr/plugin-reseed-radar": "workspace:*",
         "@sqtrackr/plugin-sdk": "workspace:*",
+        "@sqtrackr/plugin-upload-subscriptions": "workspace:*",
         "bcrypt": "^6.0.0",
         "bencode": "^4.0.1",
         "bittorrent-tracker": "9.19.0",
@@ -53,8 +55,10 @@
       "version": "2.1.0",
       "dependencies": {
         "@sqtrackr/plugin-collages": "workspace:*",
+        "@sqtrackr/plugin-member-ranks": "workspace:*",
         "@sqtrackr/plugin-reseed-radar": "workspace:*",
         "@sqtrackr/plugin-sdk": "workspace:*",
+        "@sqtrackr/plugin-upload-subscriptions": "workspace:*",
         "lucide-react": "1.42.0",
         "next": "16.3.6",
         "react": "19.2.8",
@@ -97,8 +101,42 @@
         "react": "*",
       },
     },
+    "plugins/member-ranks": {
+      "name": "@sqtrackr/plugin-member-ranks",
+      "version": "1.0.0",
+      "dependencies": {
+        "@sqtrackr/plugin-sdk": "workspace:*",
+        "lucide-react": "1.42.0",
+      },
+      "devDependencies": {
+        "@types/react": "19.2.18",
+        "next": "16.3.6",
+        "react": "19.2.8",
+      },
+      "peerDependencies": {
+        "next": "*",
+        "react": "*",
+      },
+    },
     "plugins/reseed-radar": {
       "name": "@sqtrackr/plugin-reseed-radar",
+      "version": "1.0.0",
+      "dependencies": {
+        "@sqtrackr/plugin-sdk": "workspace:*",
+        "lucide-react": "1.42.0",
+      },
+      "devDependencies": {
+        "@types/react": "19.2.18",
+        "next": "16.3.6",
+        "react": "19.2.8",
+      },
+      "peerDependencies": {
+        "next": "*",
+        "react": "*",
+      },
+    },
+    "plugins/upload-subscriptions": {
+      "name": "@sqtrackr/plugin-upload-subscriptions",
       "version": "1.0.0",
       "dependencies": {
         "@sqtrackr/plugin-sdk": "workspace:*",
@@ -367,9 +405,13 @@
 
     "@sqtrackr/plugin-collages": ["@sqtrackr/plugin-collages@workspace:plugins/collages"],
 
+    "@sqtrackr/plugin-member-ranks": ["@sqtrackr/plugin-member-ranks@workspace:plugins/member-ranks"],
+
     "@sqtrackr/plugin-reseed-radar": ["@sqtrackr/plugin-reseed-radar@workspace:plugins/reseed-radar"],
 
     "@sqtrackr/plugin-sdk": ["@sqtrackr/plugin-sdk@workspace:packages/plugin-sdk"],
+
+    "@sqtrackr/plugin-upload-subscriptions": ["@sqtrackr/plugin-upload-subscriptions@workspace:plugins/upload-subscriptions"],
 
     "@swc/helpers": ["@swc/helpers@0.5.23", "", { "dependencies": { "tslib": "^2.8.0" } }, "sha512-5lSsMOTXURePglDfvuAQUqkGek9Hg2kksOYay2m0+XR++b2NWYL/4sWyuvVBIs8oKnJaxkdi9whaL/sqN13afw=="],
 

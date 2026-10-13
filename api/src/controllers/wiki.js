@@ -1,4 +1,5 @@
 import slugify from "slugify";
+import mongoose from "mongoose";
 import Wiki from "../schema/wiki.js";
 import { envFlag } from "../utils/env.js";
 import {
@@ -174,6 +175,11 @@ export const updateWiki = async (req, res, next) => {
         res
           .status(401)
           .send("You do not have permission to create a wiki page");
+        return;
+      }
+
+      if (!mongoose.isValidObjectId(req.params.wikiId)) {
+        res.status(404).send("That wiki page does not exist");
         return;
       }
 

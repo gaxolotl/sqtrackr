@@ -1,6 +1,11 @@
 FROM oven/bun:1
 ENV NODE_ENV=production
-ENV SENTRY_DSN="https://9b9761216607428180ea3b32bd1c8e58@o140996.ingest.sentry.io/4504645996576768"
+# SENTRY_DSN is intentionally not baked into the image. Provide it at build
+# time (--build-arg SENTRY_DSN=...) or, preferably, at runtime via the
+# compose `environment` passthrough. The API runs fine without it
+# (Sentry.init is skipped when SENTRY_DSN is unset).
+ARG SENTRY_DSN=""
+ENV SENTRY_DSN=${SENTRY_DSN}
 LABEL org.opencontainers.image.source=https://github.com/tdjsnelling/sqtracker
 WORKDIR /sqtracker
 COPY package.json bun.lock ./

@@ -78,6 +78,9 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         <p className="auth-intro">
           {mode === "login" ? t("loginIntro") : t("registerIntro")}
         </p>
+        {mode === "login" && searchParams.get("expired") === "1" ? (
+          <p className="auth-intro">{t("sessionExpired")}</p>
+        ) : null}
         <form className="stack-form" onSubmit={submit}>
           <Field label={t("username")}>
             <input

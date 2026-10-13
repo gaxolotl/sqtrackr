@@ -118,7 +118,12 @@ export const identifyTorrent = async (req, res, next) => {
         res,
       );
       if (!decoded) return;
-      releaseName = bytesToString(decoded.parsed.info?.name ?? "");
+      // Torrent-derived names are user-controlled and unbounded: cap the
+      // length before release-name parsing to bound regex work.
+      releaseName = bytesToString(decoded.parsed.info?.name ?? "").slice(
+        0,
+        500,
+      );
     }
 
     if (!releaseName) {
@@ -149,6 +154,28 @@ export const uploadTorrent = async (req, res, next) => {
       );
       if (!decoded) return;
       const parsed = decoded.parsed;
+      // The .torrent payload is fully user-controlled: reject malformed
+      // info dicts before any DB work so crafted files fail fast with a
+      // 400 instead of throwing later (500) or storing garbage.
+      if (
+        !parsed ||
+        typeof parsed !== "object" ||
+        Array.isArray(parsed) ||
+        !parsed.info ||
+        typeof parsed.info !== "object" ||
+        Array.isArray(parsed.info)
+      ) {
+        res.status(400).send("Could not read the .torrent file");
+        return;
+      }
+      // The info name feeds release-name parsing and the download
+      // filename: require a bounded string so oversized names cannot be
+      // used for regex/CPU or header abuse.
+      const torrentDirName = bytesToString(parsed.info.name ?? "");
+      if (!torrentDirName || torrentDirName.length > 1024) {
+        res.status(400).send("Could not read the .torrent file");
+        return;
+      }
       const name = validateContentText(
         req.body.name,
         "Torrent name",
@@ -273,23 +300,65 @@ export const uploadTorrent = async (req, res, next) => {
         return;
       }
 
+      // File entries are user-controlled: bound the count, require a
+      // valid path/length per entry, and derive sizes only from the
+      // validated records so malformed torrents fail with a 400.
+      const MAX_TORRENT_FILES = 2000;
+      const MAX_TORRENT_PATH_CHARS = 1024;
       let files;
-      if (parsed.info.files) {
-        files = parsed.info.files.map((file) => ({
-          path: file.path.map((tok) => bytesToString(tok)).join("/"),
-          size: file.length,
-        }));
+      if (parsed.info.files !== undefined) {
+        if (
+          !Array.isArray(parsed.info.files) ||
+          parsed.info.files.length === 0 ||
+          parsed.info.files.length > MAX_TORRENT_FILES
+        ) {
+          res.status(400).send("Could not read the .torrent file");
+          return;
+        }
+        files = [];
+        for (const file of parsed.info.files) {
+          if (
+            !file ||
+            typeof file !== "object" ||
+            !Array.isArray(file.path) ||
+            file.path.length === 0
+          ) {
+            res.status(400).send("Could not read the .torrent file");
+            return;
+          }
+          const filePath = file.path
+            .map((tok) => bytesToString(tok))
+            .join("/");
+          if (!filePath || filePath.length > MAX_TORRENT_PATH_CHARS) {
+            res.status(400).send("Could not read the .torrent file");
+            return;
+          }
+          if (!Number.isSafeInteger(file.length) || file.length < 0) {
+            res.status(400).send("Could not read the .torrent file");
+            return;
+          }
+          files.push({ path: filePath, size: file.length });
+        }
       } else {
-        files = [
-          {
-            path: bytesToString(parsed.info.name),
-            size: parsed.info.length,
-          },
-        ];
+        if (
+          !Number.isSafeInteger(parsed.info.length) ||
+          parsed.info.length < 0
+        ) {
+          res.status(400).send("Could not read the .torrent file");
+          return;
+        }
+        const singlePath = bytesToString(parsed.info.name ?? "");
+        if (!singlePath || singlePath.length > MAX_TORRENT_PATH_CHARS) {
+          res.status(400).send("Could not read the .torrent file");
+          return;
+        }
+        files = [{ path: singlePath, size: parsed.info.length }];
       }
 
       const hasBlackListedFiles = files.some((file) =>
-        getExtensionBlacklist().some((ext) => file.path.endsWith(`.${ext}`)),
+        getExtensionBlacklist().some((ext) =>
+          file.path.toLowerCase().endsWith(`.${String(ext).toLowerCase()}`),
+        ),
       );
 
       if (hasBlackListedFiles) {
@@ -338,11 +407,7 @@ export const uploadTorrent = async (req, res, next) => {
         downloads: 0,
         anonymous:
           envFlag("SQ_ALLOW_ANONYMOUS_UPLOADS") && !!req.body.anonymous,
-        size:
-          parsed.info.length ||
-          parsed.info.files.reduce((acc, cur) => {
-            return acc + cur.length;
-          }, 0),
+        size: files.reduce((acc, cur) => acc + cur.size, 0),
         files,
         created: Date.now(),
         upvotes: [],
@@ -410,6 +475,20 @@ export const uploadTorrent = async (req, res, next) => {
           },
           $unset: { binary: 1 },
         });
+
+        pluginEvents.emitDetached(
+          "torrent.created",
+          {
+            torrentId: newTorrent._id.toString(),
+            infoHash,
+            name: newTorrent.name,
+            tags: [...(newTorrent.tags ?? [])],
+            type: newTorrent.type,
+            source: newTorrent.source,
+            uploadedBy: req.userId.toString(),
+          },
+          { userId: req.userId.toString() },
+        );
 
         res.status(200).json({ infoHash, status: "approved" });
       } catch (publishError) {
@@ -813,6 +892,14 @@ export const deleteTorrent = async (req, res, next) => {
 const escapeRegex = (value) =>
   String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+// MongoDB $text $search treats "-" (term negation) and '"' (phrase
+// delimiters) as operators. This input only tunes relevance ranking, so
+// strip those characters to keep user input from tweaking the ranking.
+// Replacing with a space preserves normal token matching since the text
+// index tokenizes on punctuation anyway.
+const sanitizeTextSearch = (value) =>
+  String(value).replace(/["-]/g, " ").replace(/\s+/g, " ").trim();
+
 const getTorrentSearchStages = (query) => {
   if (!query) {
     return { hasTextQuery: false, textStages: [], mediaStages: [] };
@@ -820,9 +907,9 @@ const getTorrentSearchStages = (query) => {
 
   const parsed = parseReleaseName(query);
   const searchTitle = parsed.query.trim();
-  const queryNGrams = searchTitle
-    ? nGrams(searchTitle, false, 2, false).join(" ")
-    : "";
+  const queryNGrams = sanitizeTextSearch(
+    searchTitle ? nGrams(searchTitle, false, 2, false).join(" ") : "",
+  );
   const textStages = queryNGrams
     ? [
         {

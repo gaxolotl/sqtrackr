@@ -15,9 +15,12 @@ It implements all of the features required to run a private (or public) tracker 
   * Sending of invites
   * Account management (2FA, password resets etc.)
   * Personal API tokens, announce-key rotation and sign-out-everywhere
+  * Logged-in devices list with per-device sign-out
   * Notification center with unread badges
   * Personal dashboard with stats, hit'n'run warnings and recent activity
   * Server-side saved searches
+  * Upload subscriptions (follow tags, categories and uploaders from the Bookmarks tab)
+  * Earned member classes (Member → Power User → Elite → Veteran → Legend) with progress tracking on profiles
   * Custom profiles with WebP avatars, bios, locations and websites
   * Bonus points system (purchase invites, upload etc.)
   * Option to browse torrents without logging in (for search engine discovery)
@@ -47,6 +50,8 @@ It implements all of the features required to run a private (or public) tracker 
 * Moderation
   * Staff / admin privileges
   * Combined moderation hub with members tab, bulk actions and an upload review queue
+  * Cheat-log review in the moderation hub (impossible speeds, rapid announces, oversized downloads, ghost completions)
+  * Ranks tab with member classes and ratio-watch flags
   * Optional premoderation queue for user uploads with retained decisions and private-message notifications
   * User warnings with appeals and a staff audit log
   * Reporting torrents to be reviewed by staff
@@ -59,11 +64,14 @@ It implements all of the features required to run a private (or public) tracker 
 * Tracker integrity
   * Banned BitTorrent client prefixes denied on announce
   * Physically impossible upload speeds flagged for review
+  * Rapid re-announces, downloads larger than the torrent, and completions with zero downloaded bytes flagged for review (throttled, log-only)
 * Plugins
-  * Trusted, build-time plugin API with routes, storage, settings, events and UI slots
+  * Trusted, build-time plugin API with routes, storage, settings, events, tabs and UI slots
   * Enable, configure and remove installed plugins from **Settings → Plugins**
   * Ships with the Reseed example plugin for reviving torrents that have lost their seeders
   * Ships with the Collages plugin for curated torrent collections
+  * Ships with the Upload Subscriptions plugin (tag / category / uploader follows, rendered as a Bookmarks tab)
+  * Ships with the Member Ranks plugin (earned classes plus ratio-watch, rendered as profile and moderation tabs)
 * Tracker appearance
   * Configurable theme / CSS
   * Installable PWA with app manifest and mobile polish
@@ -74,7 +82,8 @@ It implements all of the features required to run a private (or public) tracker 
 
 The roadmap is still being expanded.
 
-* Expanded anti-cheat (automated flags and detection heuristics beyond client-blacklist and speed-anomaly logging)
+* Automated anti-cheat actions (warnings or restrictions driven by cheat-log signals, beyond the current log-only flags)
+* Staff ratio-watch listing (currently admin-only via the Ranks tab)
 
 ## Quick Start
 

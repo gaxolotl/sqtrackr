@@ -422,7 +422,7 @@ export function TorrentDetail({ infoHash }: { infoHash: string }) {
                       className="secondary-button button-link"
                       href={`https://www.themoviedb.org/${data.tmdb.mediaType}/${data.tmdb.id}`}
                       target="_blank"
-                      rel="noreferrer"
+                      rel="noreferrer noopener"
                     >
                       TMDB <ExternalLink aria-hidden="true" />
                     </a>
@@ -431,7 +431,7 @@ export function TorrentDetail({ infoHash }: { infoHash: string }) {
                         className="secondary-button button-link"
                         href={`https://www.imdb.com/title/${data.tmdb.imdbId}/`}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noreferrer noopener"
                       >
                         IMDb <ExternalLink aria-hidden="true" />
                       </a>
@@ -450,7 +450,7 @@ export function TorrentDetail({ infoHash }: { infoHash: string }) {
                       "Anonymous"
                     ) : (
                       <Link
-                        href={`/user/${data.uploadedBy?.username ?? "unknown"}`}
+                        href={`/user/${encodeURIComponent(data.uploadedBy?.username ?? "unknown")}`}
                       >
                         {data.uploadedBy?.username ?? "Unknown"}
                       </Link>

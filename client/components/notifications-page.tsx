@@ -15,6 +15,18 @@ import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import type { NotificationPage } from "@/lib/types";
 
+// Notification links are stored server-side, but only same-site relative
+// paths are safe to hand to next/link. Anything else (absolute URLs,
+// protocol-relative "//host" paths) falls back to the notifications page
+// to block open-redirect phishing.
+function safeNotificationLink(link: unknown) {
+  return typeof link === "string" &&
+    link.startsWith("/") &&
+    !link.startsWith("//")
+    ? link
+    : "/notifications";
+}
+
 export function NotificationsPage() {
   const { session } = useAuth();
   const [page, setPage] = useState(0);
@@ -89,7 +101,7 @@ export function NotificationsPage() {
           {notifications.data?.items.map((item) => (
             <Link
               className="feed-card"
-              href={item.link ?? "/notifications"}
+              href={safeNotificationLink(item.link)}
               key={item._id}
               onClick={() => markOne(item._id)}
             >

@@ -1,5 +1,6 @@
 import express from "express";
 import ratelimit from "express-rate-limit";
+import { hasValidServerSecret } from "../middleware/auth.js";
 import {
   addComment,
   createAnnouncement,
@@ -20,7 +21,7 @@ const limiter = ratelimit({
   keyGenerator: (req) => {
     if (
       req.headers["x-forwarded-for"] &&
-      req.headers["x-sq-server-secret"] === process.env.SQ_SERVER_SECRET
+      hasValidServerSecret(req)
     ) {
       return req.headers["x-forwarded-for"].split(",")[0];
     }

@@ -1,6 +1,6 @@
 "use client";
 
-import { apiFetch, AuthResponse, AuthSession, withRole } from "@/lib/api";
+import { apiFetch, AuthResponse, AuthSession, handleExpiredSession, isStoredSessionExpired, withRole } from "@/lib/api";
 import {
   createContext,
   useContext,
@@ -59,6 +59,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!session) return;
+    // Proactively drop JWTs that are already past expiry so an expired
+    // session signs out immediately instead of failing requests first.
+    if (isStoredSessionExpired()) {
+      handleExpiredSession();
+      return;
+    }
     const currentSession = session;
     let active = true;
 

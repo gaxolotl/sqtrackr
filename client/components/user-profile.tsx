@@ -15,6 +15,7 @@ import {
 import { FormEvent, useState } from "react";
 import { useAuth } from "@/components/auth-context";
 import { TorrentTable } from "@/components/torrent-table";
+import { PluginTab, usePluginHost } from "@/components/plugin-host";
 import {
   ActionMessage,
   ApiState,
@@ -37,14 +38,39 @@ function websiteHost(website: string) {
   }
 }
 
+// The API only accepts http(s) website URLs, but stored values predate
+// validation, so re-check before rendering a clickable link. Anything else
+// is shown as plain text to block javascript:/data: href injection.
+function safeWebsiteHref(website: string) {
+  try {
+    const parsed = new URL(website);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return website;
+    }
+  } catch {
+    // fall through to null below
+  }
+  return null;
+}
+
 export function UserProfile({ username }: { username: string }) {
   const { session } = useAuth();
+  const pluginHost = usePluginHost();
   const { data, error, loading, reload } = useApiData<UserProfileType>(
     session ? `/user/${encodeURIComponent(username)}` : null,
   );
   const [actionError, setActionError] = useState("");
   const [message, setMessage] = useState("");
   const [savingRole, setSavingRole] = useState(false);
+  const [activeTab, setActiveTab] = useState("overview");
+  const pluginTabs = pluginHost.tabs("profile");
+  const currentTab =
+    activeTab.startsWith("plugin:") &&
+    pluginTabs.some((tab) => `plugin:${tab.pluginId}` === activeTab)
+      ? activeTab
+      : "overview";
+  const tabContext =
+    data != null ? { userId: data._id, username: data.username } : {};
 
   if (!session) {
     return (
@@ -236,8 +262,12 @@ export function UserProfile({ username }: { username: string }) {
                       <MapPin aria-hidden="true" /> {data.location}
                     </span>
                   ) : null}
-                  {data.website ? (
-                    <a href={data.website} target="_blank" rel="noreferrer">
+                  {data.website && safeWebsiteHref(data.website) ? (
+                    <a
+                      href={data.website}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                    >
                       <Globe aria-hidden="true" /> {websiteHost(data.website)}
                     </a>
                   ) : null}
@@ -245,6 +275,47 @@ export function UserProfile({ username }: { username: string }) {
               </div>
             </section>
             <ActionMessage message={message} error={actionError} />
+
+            {pluginTabs.length ? (
+              <>
+                <div className="tab-bar" role="tablist" aria-label="Profile">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={currentTab === "overview"}
+                    onClick={() => setActiveTab("overview")}
+                  >
+                    Overview
+                  </button>
+                  {pluginTabs.map((tab) => (
+                    <button
+                      key={tab.pluginId}
+                      type="button"
+                      role="tab"
+                      aria-selected={currentTab === `plugin:${tab.pluginId}`}
+                      onClick={() => setActiveTab(`plugin:${tab.pluginId}`)}
+                    >
+                      {tab.contribution.label}
+                    </button>
+                  ))}
+                </div>
+                {currentTab !== "overview" ? (
+                  <section role="tabpanel">
+                    {pluginTabs
+                      .filter(
+                        (tab) => `plugin:${tab.pluginId}` === currentTab,
+                      )
+                      .map((tab) => (
+                        <PluginTab
+                          key={tab.pluginId}
+                          tab={tab}
+                          context={tabContext}
+                        />
+                      ))}
+                  </section>
+                ) : null}
+              </>
+            ) : null}
 
             {session.role === "admin" ? (
               <section className="admin-note">
@@ -335,6 +406,8 @@ export function UserProfile({ username }: { username: string }) {
               </section>
             ) : null}
 
+            {currentTab === "overview" || !pluginTabs.length ? (
+              <>
             <section className="stats-grid">
               {stats.map(({ label, value, icon: Icon }) => (
                 <article className="stat-card" key={label}>
@@ -373,7 +446,7 @@ export function UserProfile({ username }: { username: string }) {
                         <div className="comment-meta">
                           <p>
                             Comment by{" "}
-                            <Link href={`/user/${data.username}`}>
+                            <Link href={`/user/${encodeURIComponent(data.username)}`}>
                               {data.username}
                             </Link>{" "}
                             on <Link href={target}>{name}</Link>
@@ -389,6 +462,8 @@ export function UserProfile({ username }: { username: string }) {
                 )}
               </div>
             </section>
+              </>
+            ) : null}
           </>
         ) : null}
       </ApiState>

@@ -1,6 +1,7 @@
 import express from "express";
 import morgan from "morgan";
 import chalk from "chalk";
+import net from "net";
 import bodyParser from "body-parser";
 import cookieParser from "cookie-parser";
 import cors from "cors";
@@ -12,7 +13,7 @@ import * as Sentry from "@sentry/node";
 import config from "../../config.js";
 import validateConfig from "./utils/validateConfig.js";
 import createTrackerRoute from "./tracker/routes.js";
-import auth from "./middleware/auth.js";
+import auth, { hasValidServerSecret } from "./middleware/auth.js";
 import {
   accountRoutes,
   userRoutes,
@@ -139,7 +140,19 @@ validateConfig(config)
     connectToDb();
 
     const app = express();
-    app.set("trust proxy", true);
+    // Single reverse-proxy hop (nginx OR traefik, never chained) between the
+    // client and the API: api ports are bound to 127.0.0.1 and the proxy
+    // appends $proxy_add_x_forwarded_for. Trusting exactly one hop keeps
+    // req.ip/client-IP correct for rate limiting and logs, while `true`
+    // (trust-all) would let any client spoof X-Forwarded-For past the proxy.
+    // `loopback` alone is wrong here: the proxy reaches the API over the
+    // docker bridge network, not loopback, so it would collapse every user
+    // into one shared rate-limit bucket keyed by the proxy IP.
+    app.set("trust proxy", 1);
+    // Defense-in-depth: the flat "simple" parser cannot build nested objects
+    // or arrays from `?a[b]=c` syntax, so crafted query strings cannot turn
+    // flat `req.query` string checks (torrent/forum/search/RSS) into objects.
+    app.set("query parser", "simple");
     app.disable("x-powered-by");
     app.use((req, res, next) => {
       res.setHeader("X-Content-Type-Options", "nosniff");
@@ -159,8 +172,21 @@ validateConfig(config)
       }
     };
 
+    // Query-string secrets plus path-segment credentials: /announce/:uid
+    // carries the tracker's per-user auth credential and
+    // /torrent/download/:infoHash/:userId carries a user id, so both are
+    // redacted before anything reaches the logs.
     const redactSensitiveQuery = (url) =>
-      url?.replace(/([?&](?:token|password|passkey)=)[^&]*/gi, "$1[redacted]");
+      url
+        ?.replace(
+          /([?&](?:token|rssToken|password|passwd|passkey|secret|api[_-]?key)=)[^&]*/gi,
+          "$1[redacted]",
+        )
+        ?.replace(/(\/announce\/)[^/?#\s]+/g, "$1[redacted]")
+        ?.replace(
+          /(\/torrent\/download\/[^/?#\s]+\/)[^/?#\s]+/g,
+          "$1[redacted]",
+        );
 
     app.use(
       morgan((tokens, req, res) => {
@@ -193,16 +219,23 @@ validateConfig(config)
     // the client browser, we need to make use of the forwarded IP rather than
     // the origin of the request, as this will be the same for all users. to
     // prevent avoiding a client spoofing this to avoid the limit, we also verify
-    // a secret only available to the server
+    // a secret only available to the server. The comparison is constant-time
+    // (hasValidServerSecret) so the secret cannot be probed byte-by-byte, and
+    // the forwarded value must parse as an IP, so spoofed garbage cannot shard
+    // buckets or poison logs.
     const rateLimitOptions = (max, windowMs) => ({
       windowMs,
       max,
       keyGenerator: (req) => {
+        const forwarded = req.headers["x-forwarded-for"];
         if (
-          req.headers["x-forwarded-for"] &&
-          req.headers["x-sq-server-secret"] === process.env.SQ_SERVER_SECRET
-        )
-          return req.headers["x-forwarded-for"].split(",")[0];
+          typeof forwarded === "string" &&
+          forwarded &&
+          hasValidServerSecret(req)
+        ) {
+          const first = forwarded.split(",")[0].trim();
+          if (first && net.isIP(first)) return first;
+        }
         return req.ip;
       },
       skip: (req) => {
@@ -368,7 +401,11 @@ validateConfig(config)
         next(err);
         return;
       }
-      console.error("[sq] error in", req.url, err);
+      console.error(
+        "[sq] error in",
+        redactSensitiveQuery(req.url),
+        err?.message ?? err,
+      );
       res.type("text/plain").status(500).send("sqtracker API error");
     });
 

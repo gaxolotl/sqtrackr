@@ -15,7 +15,7 @@ import { useTrackerConfig } from "@/hooks/use-tracker-config";
 import { FeatureDisabled } from "@/components/feature-disabled";
 import { apiFetch, apiOrigin } from "@/lib/api";
 
-type RssAccess = { token: string };
+type RssAccess = { token: string | null };
 
 const feedReaders = [
   { name: "NewsBlur", url: "https://www.newsblur.com/" },
@@ -137,6 +137,12 @@ export function RssPage() {
               </button>
             </div>
           </Field>
+          {access.data && !access.data.token && (
+            <p>
+              Your RSS token is stored securely and cannot be shown again.
+              Regenerate it below to get a new feed URL.
+            </p>
+          )}
           <div className="rss-primary-actions">
             <a
               className="primary-button button-link"

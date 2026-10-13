@@ -62,5 +62,6 @@
   "pleaseWait": "Please wait…",
   "newHere": "New here?",
   "alreadyAccount": "Already have an account?",
-  "forgotPassword": "Forgot your password?"
+  "forgotPassword": "Forgot your password?",
+  "sessionExpired": "Votre session a expiré. Connectez-vous à nouveau pour continuer."
 }

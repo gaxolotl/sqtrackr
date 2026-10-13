@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Copy, KeyRound, ShieldCheck, Ticket, Upload } from "lucide-react";
+import { Copy, Download, KeyRound, ShieldCheck, Ticket, Upload } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { useAuth } from "@/components/auth-context";
 import {
@@ -24,6 +24,15 @@ type ApiTokenMeta = {
   prefix: string;
   created: number;
   lastUsedAt?: number;
+};
+type DeviceSession = {
+  id: string;
+  device: string;
+  ip?: string | null;
+  created: number;
+  lastSeen: number;
+  revoked: boolean;
+  current: boolean;
 };
 import { UserAvatar } from "@/components/user-avatar";
 import { useTrackerConfig } from "@/hooks/use-tracker-config";
@@ -55,6 +64,14 @@ export function AccountPage() {
   const tokens = useApiData<ApiTokenMeta[]>(
     session ? "/account/tokens" : null,
   );
+  const devices = useApiData<{ sessions: DeviceSession[] }>(
+    session ? "/account/sessions" : null,
+  );
+  const totpStatus = useApiData<{ enabled: boolean }>(
+    session ? "/account/totp/status" : null,
+  );
+  const totpEnabled = totpStatus.data?.enabled ?? false;
+  const [revokingSession, setRevokingSession] = useState<string | null>(null);
   const [newToken, setNewToken] = useState<string | null>(null);
   const [newAnnounceUrl, setNewAnnounceUrl] = useState<string | null>(null);
   const invites = useApiData<Invite[]>(session ? "/account/invites" : null);
@@ -187,6 +204,38 @@ export function AccountPage() {
     }
   }
 
+  async function revokeSession(device: DeviceSession) {
+    if (
+      !window.confirm(
+        device.current
+          ? "Sign out this device? You will be logged out immediately."
+          : `Sign out "${device.device}"?`,
+      )
+    )
+      return;
+    setRevokingSession(device.id);
+    setMessage("");
+    setActionError("");
+    try {
+      await apiFetch(`/account/sessions/${device.id}`, { method: "DELETE" });
+      if (device.current) {
+        logout();
+        router.push("/login");
+        return;
+      }
+      setMessage("Device signed out.");
+      devices.reload();
+    } catch (requestError) {
+      setActionError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not sign out the device.",
+      );
+    } finally {
+      setRevokingSession(null);
+    }
+  }
+
   async function signOutEverywhere() {
     if (
       !window.confirm(
@@ -203,10 +252,20 @@ export function AccountPage() {
     router.push("/login");
   }
 
-  async function beginTotp() {
+  async function beginTotp(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const password = String(
+      new FormData(event.currentTarget).get("password") ?? "",
+    );
+    setMessage("");
     setActionError("");
     try {
-      setTotp(await apiFetch<TotpSetup>("/account/totp/generate"));
+      setTotp(
+        await apiFetch<TotpSetup>("/account/totp/generate", {
+          method: "POST",
+          body: JSON.stringify({ password }),
+        }),
+      );
     } catch (requestError) {
       setActionError(
         requestError instanceof Error
@@ -220,23 +279,72 @@ export function AccountPage() {
     event.preventDefault();
     const form = event.currentTarget;
     const token = new FormData(form).get("token");
+    const password = String(new FormData(form).get("password") ?? "");
     setMessage("");
     setActionError("");
     try {
       const codes = await apiFetch<string>("/account/totp/enable", {
         method: "POST",
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ token, password }),
       });
       setBackupCodes(codes.split(",").filter(Boolean));
       setMessage(
         "Two-factor authentication enabled. Store these backup codes safely.",
       );
+      setTotp(null);
+      totpStatus.reload();
       form.reset();
     } catch (requestError) {
       setActionError(
         requestError instanceof Error
           ? requestError.message
           : "Could not enable two-factor authentication.",
+      );
+    }
+  }
+
+  function downloadBackupCodes() {
+    if (!backupCodes.length) return;
+    const content = backupCodes.join("\n") + "\n";
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "sqtrackr-backup-codes.txt";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function disableTotp(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const token = String(new FormData(form).get("token") ?? "");
+    const password = String(new FormData(form).get("password") ?? "");
+    if (
+      !window.confirm(
+        "Disable two-factor authentication? Your account will be protected by password only.",
+      )
+    )
+      return;
+    setMessage("");
+    setActionError("");
+    try {
+      await apiFetch("/account/totp/disable", {
+        method: "POST",
+        body: JSON.stringify({ token, password }),
+      });
+      setMessage("Two-factor authentication disabled.");
+      setTotp(null);
+      setBackupCodes([]);
+      totpStatus.reload();
+      form.reset();
+    } catch (requestError) {
+      setActionError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not disable two-factor authentication.",
       );
     }
   }
@@ -553,8 +661,21 @@ export function AccountPage() {
       </section>
       <section className="account-section">
         <h2>Two-factor authentication</h2>
-        <p>Use an authenticator app to add another layer of security.</p>
-        {totp ? (
+        <ApiState
+          loading={totpStatus.loading}
+          error={totpStatus.error}
+          empty={false}
+        >
+          {totpEnabled ? (
+            <p>
+              <ShieldCheck aria-hidden="true" /> Two-factor authentication is
+              currently enabled on your account.
+            </p>
+          ) : (
+            <p>Use an authenticator app to add another layer of security.</p>
+          )}
+        </ApiState>
+        {totp && !totpEnabled ? (
           <div className="totp-setup">
             <Image
               src={totp.qr}
@@ -573,30 +694,83 @@ export function AccountPage() {
                   required
                 />
               </Field>
+              <Field label="Current password">
+                <input
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  maxLength={128}
+                  required
+                />
+              </Field>
               <button className="primary-button" type="submit">
                 Enable 2FA
               </button>
             </form>
-            {backupCodes.length ? (
-              <div
-                className="backup-codes"
-                aria-label="Two-factor backup codes"
-              >
-                {backupCodes.map((code) => (
-                  <code key={code}>{code}</code>
-                ))}
-              </div>
-            ) : null}
           </div>
-        ) : (
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={beginTotp}
-          >
-            <ShieldCheck aria-hidden="true" /> Set up 2FA
-          </button>
-        )}
+        ) : null}
+        {!totp && !totpEnabled ? (
+          <form className="inline-form" onSubmit={beginTotp}>
+            <Field label="Current password">
+              <input
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                maxLength={128}
+                required
+              />
+            </Field>
+            <button className="secondary-button" type="submit">
+              <ShieldCheck aria-hidden="true" /> Set up 2FA
+            </button>
+          </form>
+        ) : null}
+        {backupCodes.length ? (
+          <>
+            <div
+              className="backup-codes"
+              aria-label="Two-factor backup codes"
+            >
+              {backupCodes.map((code) => (
+                <code key={code}>{code}</code>
+              ))}
+            </div>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={downloadBackupCodes}
+            >
+              <Download aria-hidden="true" /> Download backup codes (.txt)
+            </button>
+          </>
+        ) : null}
+        {totpEnabled ? (
+          <form className="inline-form" onSubmit={disableTotp}>
+            <Field label="Authenticator code">
+              <input
+                name="token"
+                inputMode="numeric"
+                maxLength={6}
+                required
+              />
+            </Field>
+            <Field label="Current password">
+              <input
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                maxLength={128}
+                required
+              />
+            </Field>
+            <button
+              className="secondary-button danger-action"
+              type="submit"
+            >
+              Disable 2FA
+            </button>
+          </form>
+        ) : null}
       </section>
       <section className="account-section">
         <h2>Change password</h2>
@@ -680,6 +854,48 @@ export function AccountPage() {
       </section>
       <section className="account-section">
         <h2>Sessions and announce key</h2>
+        <p>Every browser you sign in with shows up here.</p>
+        <ApiState
+          loading={devices.loading}
+          error={devices.error}
+          empty={
+            !devices.loading &&
+            !devices.data?.sessions.some((device) => !device.revoked)
+          }
+        >
+          <div className="feed-list">
+            {devices.data?.sessions
+              .filter((device) => !device.revoked)
+              .map((device) => (
+                <article className="feed-card" key={device.id}>
+                  <div>
+                    <h2>
+                      {device.device}
+                      {device.current ? " · This device" : ""}
+                    </h2>
+                    <p>
+                      {device.ip ? `${device.ip} · ` : ""}
+                      Signed in {formatDateTime(device.created)}
+                      {device.lastSeen
+                        ? ` · Last active ${formatDateTime(device.lastSeen)}`
+                        : ""}
+                    </p>
+                  </div>
+                  <button
+                    className="secondary-button compact-button"
+                    type="button"
+                    disabled={revokingSession === device.id}
+                    onClick={() => revokeSession(device)}
+                  >
+                    {revokingSession === device.id
+                      ? "Signing out…"
+                      : "Sign out"}
+                  </button>
+                </article>
+              ),
+            )}
+          </div>
+        </ApiState>
         {newAnnounceUrl ? (
           <p>
             New announce URL: <strong>{newAnnounceUrl}</strong>

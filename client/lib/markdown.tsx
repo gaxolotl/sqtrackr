@@ -3,6 +3,12 @@ import type { ReactNode } from "react";
 const inlinePattern =
   /(`[^`\n]+`)|(\*\*([^*\n]+)\*\*)|(\*([^*\n]+)\*)|(!\[([^\]\n]*)\]\(([^)\s]+)\))|(\[([^\]\n]+)\]\(([^)\s]+)\))/g;
 
+// Single-slash relative URLs stay on this site. Protocol-relative URLs
+// ("//evil.example") would navigate to an attacker host, so they are not
+// treated as safe even though they start with "/".
+const isSafeRelativeUrl = (value: string) =>
+  value.startsWith("/") && !value.startsWith("//");
+
 function renderInline(value: string, depth = 0): ReactNode[] {
   if (depth > 6) return [value];
   const nodes: ReactNode[] = [];
@@ -30,11 +36,17 @@ function renderInline(value: string, depth = 0): ReactNode[] {
     } else if (match[6]) {
       const alt = match[7];
       const src = match[8];
-      if (/^https?:\/\//i.test(src) || src.startsWith("/")) {
+      if (/^https?:\/\//i.test(src) || isSafeRelativeUrl(src)) {
         nodes.push(
           // User-supplied remote images cannot use next/image (unknown hosts).
           // eslint-disable-next-line @next/next/no-img-element
-          <img key={index} src={src} alt={alt} loading="lazy" />,
+          <img
+            key={index}
+            src={src}
+            alt={alt}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />,
         );
       } else {
         nodes.push(alt);
@@ -44,7 +56,7 @@ function renderInline(value: string, depth = 0): ReactNode[] {
       const href = match[11];
       if (
         /^https?:\/\//i.test(href) ||
-        href.startsWith("/") ||
+        isSafeRelativeUrl(href) ||
         href.startsWith("#")
       ) {
         nodes.push(
@@ -52,7 +64,7 @@ function renderInline(value: string, depth = 0): ReactNode[] {
             href={href}
             key={index}
             target={
-              href.startsWith("/") || href.startsWith("#")
+              isSafeRelativeUrl(href) || href.startsWith("#")
                 ? undefined
                 : "_blank"
             }

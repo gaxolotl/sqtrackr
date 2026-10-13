@@ -165,6 +165,7 @@ Read-only helpers over core data. These return deliberately limited DTOs.
 | `progress` | `hasCompleted(userId, infoHash)` | boolean |
 | `progress` | `findSeeded(userId, infoHashes)` | info hashes the user completed or uploaded to |
 | `tracker` | `getSwarmStats(infoHash)` | `{ peers, seeders, leechers }` |
+| `users` | `getStats(userIds)` | capped (50) array of `{ userId, username, role, created, banned, uploadBytes, downloadBytes, ratio, hitnruns, snatchCount, uploadCount }` (no email, security or moderation fields) |
 
 ### Lifecycle and availability
 
@@ -176,6 +177,7 @@ Core emits these events:
 
 | Event | Data |
 |---|---|
+| `torrent.created` | `{ torrentId, infoHash, name, tags, type, source, uploadedBy }` |
 | `torrent.deleted` | `{ torrentId, infoHash }` |
 | `tracker.announce.accepted` | `{ infoHash, event, left, seeders, leechers }` |
 
@@ -201,6 +203,7 @@ import {
   defineClientPlugin,
   type PluginPageProps,
   type PluginSlotProps,
+  type PluginTabProps,
 } from "@sqtrackr/plugin-sdk/client";
 
 export const navigation = [
@@ -215,6 +218,10 @@ function ExampleSlot({ context }: PluginSlotProps) {
   return <span>Injected</span>;
 }
 
+function ExampleTab({ context }: PluginTabProps) {
+  return <span>Tab content</span>;
+}
+
 export const pages = [
   { path: "/", title: "Example", component: ExamplePage },
   { path: "/details", title: "Example", component: ExamplePage },
@@ -224,7 +231,11 @@ export const slots = [
   { name: "home.afterContent", component: ExampleSlot, authenticated: true },
 ] as const;
 
-export default defineClientPlugin({ manifest, navigation, pages, slots });
+export const tabs = [
+  { slot: "bookmarks", label: "Example", component: ExampleTab, authenticated: true },
+] as const;
+
+export default defineClientPlugin({ manifest, navigation, pages, slots, tabs });
 ```
 
 ### Contributions
@@ -232,6 +243,7 @@ export default defineClientPlugin({ manifest, navigation, pages, slots });
 - **`navigation`** — sidebar links. `{ label, href, icon?, authenticated?, roles? }`.
 - **`pages`** — routed components. `path` is relative to `/plugins/<id>`, so `"/"` renders at `/plugins/<id>` and `"/details"` at `/plugins/<id>/details`. Each page receives `{ slug }`.
 - **`slots`** — components rendered into named host locations. `{ name, component, authenticated?, roles? }`. Slot components receive `{ context }`.
+- **`tabs`** — extra tabs inside existing core pages, so a plugin can extend a page without adding a route. `{ slot, label, component, authenticated?, roles? }`. Tab components receive `{ context }`. Omit `navigation`/`pages` entirely for tab-only plugins.
 
 `authenticated` and `roles` only affect presentation; the API must still enforce permissions.
 
@@ -245,6 +257,18 @@ export default defineClientPlugin({ manifest, navigation, pages, slots });
 | `torrent.afterDetails` | After the torrent detail card | torrent context |
 
 The torrent context is `{ torrent: { _id, infoHash, name, seeders, created }, session: { id, role } | null, reload }`.
+
+### Tab slots
+
+| Slot | Location | Context |
+|---|---|---|
+| `bookmarks` | Extra tabs on the Bookmarks page | `{}` |
+| `profile` | Extra tabs on a user's profile page | `{ userId, username }` |
+| `moderation` | Extra tabs on the Moderation hub | `{}` |
+
+Tab buttons render alongside the page's own tabs and disappear when the
+plugin is disabled. Deep-link to a plugin tab with `?tab=<plugin-id>` (the
+Bookmarks page selects the matching plugin tab on load).
 
 The host renders each contribution inside a per-plugin error boundary, so a failing plugin cannot break the page.
 
@@ -279,6 +303,10 @@ Enable or disable it, configure it and remove it from **Settings → Plugins**.
 ## Example plugin
 
 [`plugins/reseed-radar`](./plugins/reseed-radar) is a complete full-stack example. It lets members request reseeds for torrents with no seeders, tracks demand, auto-fulfills requests when a seeder announces, exposes open and completed views with fuzzy search, and adds home notices and torrent-detail UI. It demonstrates routes, settings, storage, events, services, navigation, pages and slots.
+
+[`plugins/upload-subscriptions`](./plugins/upload-subscriptions) is a tab-only plugin with no routes of its own in the sidebar: it consumes `torrent.created`, matches tag/category/uploader subscriptions, and renders inside the Bookmarks page plus home and torrent-detail slots.
+
+[`plugins/member-ranks`](./plugins/member-ranks) is a tab-only plugin that computes earned member classes from the `users.getStats` service and renders a Rank tab on profiles and a Ranks tab in the moderation hub.
 
 ## Testing
 

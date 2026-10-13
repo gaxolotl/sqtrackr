@@ -14,6 +14,99 @@ export const BYTES_GB = 1e9;
 export const binaryToHex = (b) => Buffer.from(b, "binary").toString("hex");
 export const hexToBinary = (h) => Buffer.from(h, "hex").toString("binary");
 
+// Physically impossible upload speeds. The tracker asks clients to announce
+// every 30s, so anything far above 10 Gbps sustained between announces is
+// spoofed. Announce intervals below 10s with moving counters, downloads that
+// exceed the torrent size, and completions with zero downloaded bytes are
+// likewise logged for staff review (never enforced, to avoid false bans).
+export const MAX_REASONABLE_UPLOAD_BPS = 1.25e9;
+export const MIN_ANNOUNCE_INTERVAL_SECONDS = 10;
+export const CHEAT_LOG_THROTTLE_MS = 24 * 60 * 60 * 1000;
+
+export const evaluateAnnounceAnomalies = ({
+  elapsedSeconds,
+  uploadDelta,
+  downloadDelta,
+  downloadedTotal,
+  torrentSize,
+  freeleech,
+  event,
+}) => {
+  const findings = [];
+  if (
+    elapsedSeconds != null &&
+    elapsedSeconds >= MIN_ANNOUNCE_INTERVAL_SECONDS &&
+    uploadDelta > 0 &&
+    uploadDelta / elapsedSeconds > MAX_REASONABLE_UPLOAD_BPS
+  ) {
+    const bytesPerSecond = uploadDelta / elapsedSeconds;
+    findings.push({
+      reason: "impossible-upload-speed",
+      details:
+        `+${(uploadDelta / BYTES_GB).toFixed(2)} GB in ${elapsedSeconds.toFixed(0)}s ` +
+        `(${(bytesPerSecond / 1e6).toFixed(0)} MB/s)`,
+    });
+  }
+  if (
+    elapsedSeconds != null &&
+    elapsedSeconds < MIN_ANNOUNCE_INTERVAL_SECONDS &&
+    (uploadDelta > 0 || downloadDelta > 0)
+  ) {
+    findings.push({
+      reason: "announce-too-frequent",
+      details:
+        `+${uploadDelta} up / +${downloadDelta} down in ` +
+        `${elapsedSeconds.toFixed(1)}s (minimum interval ${MIN_ANNOUNCE_INTERVAL_SECONDS}s)`,
+    });
+  }
+  if (!freeleech && torrentSize > 0 && downloadedTotal > torrentSize) {
+    findings.push({
+      reason: "download-exceeds-size",
+      details: `${downloadedTotal} downloaded for a ${torrentSize} byte torrent`,
+    });
+  }
+  if (
+    !freeleech &&
+    event === "completed" &&
+    torrentSize > 0 &&
+    downloadedTotal === 0
+  ) {
+    findings.push({
+      reason: "completed-without-download",
+      details: "completed event with 0 bytes downloaded",
+    });
+  }
+  return findings;
+};
+
+const logAnomalyThrottled = async ({
+  userId,
+  infoHash,
+  peerId,
+  reason,
+  details,
+}) => {
+  try {
+    const recent = await CheatLog.exists({
+      userId,
+      infoHash,
+      reason,
+      created: { $gt: Date.now() - CHEAT_LOG_THROTTLE_MS },
+    });
+    if (recent) return;
+    await CheatLog.create({
+      userId,
+      infoHash,
+      peerId,
+      reason,
+      details,
+      created: Date.now(),
+    });
+  } catch (err) {
+    console.error("[sq] failed to write cheat log:", err.message);
+  }
+};
+
 const handleAnnounce = async (req, res) => {
   const announceUid = req.originalUrl.split("?")[0].split("/")[2];
 
@@ -66,7 +159,7 @@ const handleAnnounce = async (req, res) => {
 
   const torrent = await Torrent.findOne(
     { infoHash },
-    { _id: 1, freeleech: 1 },
+    { _id: 1, freeleech: 1, size: 1 },
   ).lean();
 
   // if torrent info hash is not in the database, deny announce
@@ -132,34 +225,33 @@ const handleAnnounce = async (req, res) => {
       ? downloaded - alreadyDownloadedSession
       : 0;
 
-  // Anti-cheat: flag physically impossible upload speeds. The tracker asks
-  // clients to announce every 30s, so anything far above 10 Gbps sustained
-  // between announces is spoofed. Log only, never deny (avoids false bans).
-  const MAX_REASONABLE_UPLOAD_BPS = 1.25e9;
+  // Anti-cheat: flag anomalous announces for staff review. Log only,
+  // throttled to one entry per user/torrent/reason per day.
   const prevUpdatedAt = prevProgressRecord?.updatedAt
     ? new Date(prevProgressRecord.updatedAt).getTime()
     : null;
-  if (prevUpdatedAt && uploadDeltaSession > 0) {
-    const elapsedSeconds = (Date.now() - prevUpdatedAt) / 1000;
-    if (elapsedSeconds >= 10) {
-      const bytesPerSecond = uploadDeltaSession / elapsedSeconds;
-      if (bytesPerSecond > MAX_REASONABLE_UPLOAD_BPS) {
-        const gb = (uploadDeltaSession / BYTES_GB).toFixed(2);
-        const details =
-          `+${gb} GB in ${elapsedSeconds.toFixed(0)}s ` +
-          `(${(bytesPerSecond / 1e6).toFixed(0)} MB/s)`;
-        CheatLog.create({
-          userId: user._id,
-          infoHash,
-          peerId,
-          reason: "impossible-upload-speed",
-          details,
-          created: Date.now(),
-        }).catch((err) =>
-          console.error("[sq] failed to write cheat log:", err.message),
-        );
-      }
-    }
+  const elapsedSeconds =
+    prevUpdatedAt == null ? null : (Date.now() - prevUpdatedAt) / 1000;
+  const downloadedTotal =
+    (prevProgressRecord?.downloaded?.total ?? 0) + downloadDeltaSession;
+  const anomalies = evaluateAnnounceAnomalies({
+    elapsedSeconds,
+    uploadDelta: uploadDeltaSession,
+    downloadDelta: downloadDeltaSession,
+    downloadedTotal,
+    torrentSize: Number(torrent.size ?? 0),
+    freeleech:
+      torrent.freeleech || envFlag("SQ_SITE_WIDE_FREELEECH"),
+    event: params.event,
+  });
+  for (const anomaly of anomalies) {
+    await logAnomalyThrottled({
+      userId: user._id,
+      infoHash,
+      peerId,
+      reason: anomaly.reason,
+      details: anomaly.details,
+    });
   }
 
   const [sumUploaded] = await Progress.aggregate([

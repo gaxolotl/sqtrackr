@@ -48,7 +48,7 @@ export function CommentThread({ comments = [], endpoint, disabled = false, onPos
         <ActionMessage error={error} />
         <div className="form-actions"><LinkPicker onInsert={insertAttachment} /><button className="primary-button" type="submit" disabled={disabled || submitting}>{submitting ? "Posting…" : "Post"}</button></div>
       </form>
-      {comments.length ? <div className="comments-list rendered-comments">{comments.map((comment) => <article className="comment" key={comment._id}><div className="comment-meta"><p><MessageSquare aria-hidden="true" /> Comment by <Link href={`/user/${comment.user?.username ?? "unknown"}`}>{comment.user?.username ?? "Unknown user"}</Link></p><time>{formatDateTime(comment.created)}</time></div><p className="comment-body">{comment.comment}</p></article>)}</div> : null}
+      {comments.length ? <div className="comments-list rendered-comments">{comments.map((comment) => <article className="comment" key={comment._id}><div className="comment-meta"><p><MessageSquare aria-hidden="true" /> Comment by <Link href={`/user/${encodeURIComponent(comment.user?.username ?? "unknown")}`}>{comment.user?.username ?? "Unknown user"}</Link></p><time>{formatDateTime(comment.created)}</time></div><p className="comment-body">{comment.comment}</p></article>)}</div> : null}
     </section>
   );
 }

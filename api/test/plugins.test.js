@@ -4,6 +4,10 @@ import express from "express";
 import mongoose from "mongoose";
 import reseedManifest from "../../plugins/reseed-radar/manifest.js";
 import reseedServer from "../../plugins/reseed-radar/server.js";
+import uploadSubscriptionsManifest from "../../plugins/upload-subscriptions/manifest.js";
+import uploadSubscriptionsServer from "../../plugins/upload-subscriptions/server.js";
+import memberRanksManifest from "../../plugins/member-ranks/manifest.js";
+import memberRanksServer from "../../plugins/member-ranks/server.js";
 import { PluginEventBus } from "../src/plugins/eventBus.js";
 import { createPluginHost } from "../src/plugins/host.js";
 import {
@@ -20,6 +24,15 @@ import {
   isRequestExpired,
   normalizeInfoHash,
 } from "../../plugins/reseed-radar/server.js";
+import {
+  normalizeSubscriptionInput,
+  subscriptionMatchesTorrent,
+} from "../../plugins/upload-subscriptions/server.js";
+import {
+  computeRank,
+  evaluateWatchStatus,
+} from "../../plugins/member-ranks/server.js";
+import { evaluateAnnounceAnomalies } from "../src/tracker/announce.js";
 
 const manifest = (id, dependencies = []) => ({
   id,
@@ -638,4 +651,234 @@ test("Reseed Radar fuzzy search matches substrings, tokens, and subsequences", (
   const exact = fuzzyScore(name, "last");
   const loose = fuzzyScore(name, "tlou");
   assert.ok(exact > loose);
+});
+
+test("Upload Subscriptions normalize kinds and match torrents", () => {
+  assert.deepEqual(normalizeSubscriptionInput("tag", "  4K Movies "), {
+    kind: "tag",
+    value: "4k-movies",
+  });
+  assert.deepEqual(normalizeSubscriptionInput("category", "movies"), {
+    kind: "category",
+    value: "movies",
+  });
+  assert.deepEqual(
+    normalizeSubscriptionInput("uploader", "A".repeat(24)),
+    { kind: "uploader", value: "a".repeat(24) },
+  );
+  assert.equal(normalizeSubscriptionInput("bogus", "x"), null);
+  assert.equal(normalizeSubscriptionInput("tag", "   "), null);
+  assert.equal(normalizeSubscriptionInput("uploader", "not-an-id"), null);
+
+  const torrent = {
+    tags: ["4k-movies", "webdl"],
+    type: "movies",
+    uploadedBy: "abc123abc123abc123abc123",
+  };
+  assert.equal(
+    subscriptionMatchesTorrent({ kind: "tag", value: "webdl" }, torrent),
+    true,
+  );
+  assert.equal(
+    subscriptionMatchesTorrent({ kind: "tag", value: "music" }, torrent),
+    false,
+  );
+  assert.equal(
+    subscriptionMatchesTorrent({ kind: "category", value: "movies" }, torrent),
+    true,
+  );
+  assert.equal(
+    subscriptionMatchesTorrent({ kind: "category", value: "tv" }, torrent),
+    false,
+  );
+  assert.equal(
+    subscriptionMatchesTorrent(
+      { kind: "uploader", value: "abc123abc123abc123abc123" },
+      { ...torrent, uploadedBy: "ABC123ABC123ABC123ABC123" },
+    ),
+    true,
+  );
+  assert.equal(
+    subscriptionMatchesTorrent(
+      { kind: "uploader", value: "abc123abc123abc123abc123" },
+      { ...torrent, uploadedBy: "ffffffffffffffffffffffff" },
+    ),
+    false,
+  );
+  assert.equal(subscriptionMatchesTorrent(null, torrent), false);
+});
+
+test("Upload Subscriptions and Member Ranks register models and settings", async () => {
+  const host = createPluginHost({
+    registry: [
+      { manifest: uploadSubscriptionsManifest, server: uploadSubscriptionsServer },
+      { manifest: memberRanksManifest, server: memberRanksServer },
+    ],
+  });
+  await host.register();
+  try {
+    assert.ok(mongoose.models.Plugin_upload_subscriptions_subscription);
+    assert.ok(mongoose.models.Plugin_upload_subscriptions_match);
+  } finally {
+    await host.stop();
+  }
+});
+
+const rankSettings = {
+  powerMinUploadGb: 25,
+  powerMinRatio: 1.0,
+  powerMinAgeDays: 28,
+  powerMinUploads: 5,
+  eliteMinUploadGb: 100,
+  eliteMinRatio: 1.2,
+  eliteMinAgeDays: 90,
+  eliteMinUploads: 25,
+  veteranMinUploadGb: 500,
+  veteranMinRatio: 1.5,
+  veteranMinAgeDays: 365,
+  veteranMinUploads: 100,
+  legendMinUploadGb: 1000,
+  legendMinRatio: 2.0,
+  legendMinAgeDays: 730,
+  legendMinUploads: 250,
+  maxHnr: 1,
+};
+
+test("Member Ranks promote through classes and gate hit'n'runs", () => {
+  const now = Date.now();
+  const daysAgo = (days) => now - days * 24 * 60 * 60 * 1000;
+
+  const fresh = computeRank(
+    { uploadBytes: 0, ratio: -1, created: now, uploads: 0, hitnruns: 0 },
+    rankSettings,
+    now,
+  );
+  assert.equal(fresh.class, "member");
+  assert.equal(fresh.next?.key, "power");
+
+  const power = computeRank(
+    {
+      uploadBytes: 30e9,
+      ratio: 1.1,
+      created: daysAgo(30),
+      uploads: 6,
+      hitnruns: 0,
+    },
+    rankSettings,
+    now,
+  );
+  assert.equal(power.class, "power");
+  assert.equal(power.next?.key, "elite");
+
+  // No download yet counts as infinite ratio, but HnRs still gate promotion.
+  const blocked = computeRank(
+    {
+      uploadBytes: 30e9,
+      ratio: -1,
+      created: daysAgo(30),
+      uploads: 6,
+      hitnruns: 5,
+    },
+    rankSettings,
+    now,
+  );
+  assert.equal(blocked.class, "member");
+
+  const legend = computeRank(
+    {
+      uploadBytes: 2000e9,
+      ratio: 3,
+      created: daysAgo(800),
+      uploads: 300,
+      hitnruns: 0,
+    },
+    rankSettings,
+    now,
+  );
+  assert.equal(legend.class, "legend");
+  assert.equal(legend.next, null);
+});
+
+test("Member Ranks ratio watch flags enforced thresholds only", () => {
+  const rank = {
+    stats: { ratio: 0.5, hitnruns: 5 },
+  };
+  assert.deepEqual(evaluateWatchStatus(rank, 0.8, 5), {
+    lowRatio: true,
+    tooManyHnr: true,
+    atRisk: true,
+  });
+  assert.deepEqual(evaluateWatchStatus(rank, null, null), {
+    lowRatio: false,
+    tooManyHnr: false,
+    atRisk: false,
+  });
+  assert.deepEqual(
+    evaluateWatchStatus({ stats: { ratio: -1, hitnruns: 0 } }, 0.8, 5).atRisk,
+    false,
+  );
+});
+
+test("Tracker anomaly checks flag speeds, intervals, sizes, and ghost completions", () => {
+  const base = {
+    elapsedSeconds: 30,
+    uploadDelta: 1e9,
+    downloadDelta: 1e9,
+    downloadedTotal: 1e9,
+    torrentSize: 10e9,
+    freeleech: false,
+    event: "started",
+  };
+  assert.deepEqual(evaluateAnnounceAnomalies(base), []);
+
+  assert.deepEqual(
+    evaluateAnnounceAnomalies({ ...base, uploadDelta: 50e9 }).map(
+      (finding) => finding.reason,
+    ),
+    ["impossible-upload-speed"],
+  );
+
+  assert.deepEqual(
+    evaluateAnnounceAnomalies({
+      ...base,
+      elapsedSeconds: 5,
+      uploadDelta: 1e6,
+      downloadDelta: 0,
+    }).map((finding) => finding.reason),
+    ["announce-too-frequent"],
+  );
+  assert.deepEqual(
+    evaluateAnnounceAnomalies({
+      ...base,
+      elapsedSeconds: 5,
+      uploadDelta: 0,
+      downloadDelta: 0,
+    }),
+    [],
+  );
+
+  assert.deepEqual(
+    evaluateAnnounceAnomalies({ ...base, downloadedTotal: 11e9 }).map(
+      (finding) => finding.reason,
+    ),
+    ["download-exceeds-size"],
+  );
+  assert.deepEqual(
+    evaluateAnnounceAnomalies({
+      ...base,
+      downloadedTotal: 11e9,
+      freeleech: true,
+    }),
+    [],
+  );
+
+  assert.deepEqual(
+    evaluateAnnounceAnomalies({
+      ...base,
+      event: "completed",
+      downloadDelta: 0,
+      downloadedTotal: 0,
+    }).map((finding) => finding.reason),
+    ["completed-without-download"],
+  );
 });

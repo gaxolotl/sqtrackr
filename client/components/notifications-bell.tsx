@@ -10,6 +10,18 @@ import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import type { NotificationPage } from "@/lib/types";
 
+// Notification links are stored server-side, but only same-site relative
+// paths are safe to hand to next/link. Anything else (absolute URLs,
+// protocol-relative "//host" paths) falls back to the notifications page
+// to block open-redirect phishing.
+function safeNotificationLink(link: unknown) {
+  return typeof link === "string" &&
+    link.startsWith("/") &&
+    !link.startsWith("//")
+    ? link
+    : "/notifications";
+}
+
 export function NotificationsBell() {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -66,7 +78,7 @@ export function NotificationsBell() {
             items.map((item) => (
               <Link
                 className="notification-row"
-                href={item.link ?? "/notifications"}
+                href={safeNotificationLink(item.link)}
                 key={item._id}
                 onClick={() => setOpen(false)}
               >

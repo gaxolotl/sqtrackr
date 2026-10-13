@@ -3,7 +3,10 @@ import ratelimit from "express-rate-limit";
 import mongoose from "mongoose";
 import PluginSettings from "../schema/pluginSettings.js";
 import Progress from "../schema/progress.js";
+import Snatch from "../schema/snatch.js";
 import Torrent from "../schema/torrent.js";
+import User from "../schema/user.js";
+import { getUserHitNRuns } from "../utils/hitnrun.js";
 import { countSwarmPeers } from "../tracker/swarm-stats.js";
 import pluginEvents from "./eventBus.js";
 import {
@@ -170,6 +173,76 @@ export const createPluginHost = ({
     tracker: Object.freeze({
       getSwarmStats: (infoHash) =>
         countSwarmPeers(tracker?.torrents?.[String(infoHash).toLowerCase()]),
+    }),
+    users: Object.freeze({
+      // Limited per-user activity stats for rank/progress style plugins.
+      // Never includes email, security state or moderation details.
+      getStats: async (userIds) => {
+        const ids = [
+          ...new Set((userIds ?? []).map((id) => String(id))),
+        ].filter((id) => mongoose.isValidObjectId(id)).slice(0, 50);
+        if (!ids.length) return [];
+        const objectIds = ids.map((id) => new mongoose.Types.ObjectId(id));
+        const [users, uploaded, downloaded, snatches, uploads] =
+          await Promise.all([
+            User.find(
+              { _id: { $in: objectIds } },
+              { username: 1, role: 1, created: 1, banned: 1 },
+            ).lean(),
+            Progress.aggregate([
+              { $match: { userId: { $in: objectIds } } },
+              {
+                $group: {
+                  _id: "$userId",
+                  bytes: { $sum: { $ifNull: ["$uploaded.total", 0] } },
+                },
+              },
+            ]),
+            Progress.aggregate([
+              { $match: { userId: { $in: objectIds } } },
+              {
+                $group: {
+                  _id: "$userId",
+                  bytes: { $sum: { $ifNull: ["$downloaded.total", 0] } },
+                },
+              },
+            ]),
+            Snatch.aggregate([
+              { $match: { userId: { $in: objectIds } } },
+              { $group: { _id: "$userId", count: { $sum: 1 } } },
+            ]),
+            Torrent.aggregate([
+              { $match: { uploadedBy: { $in: objectIds } } },
+              { $group: { _id: "$uploadedBy", count: { $sum: 1 } } },
+            ]),
+          ]);
+        const byId = (rows, key = "bytes") =>
+          new Map(rows.map((row) => [String(row._id), Number(row[key] ?? 0)]));
+        const uploadedById = byId(uploaded);
+        const downloadedById = byId(downloaded);
+        const snatchesById = byId(snatches, "count");
+        const uploadsById = byId(uploads, "count");
+        return Promise.all(
+          users.map(async (user) => {
+            const key = String(user._id);
+            const up = uploadedById.get(key) ?? 0;
+            const down = downloadedById.get(key) ?? 0;
+            return {
+              userId: key,
+              username: user.username,
+              role: user.role,
+              created: user.created,
+              banned: Boolean(user.banned),
+              uploadBytes: up,
+              downloadBytes: down,
+              ratio: down === 0 ? -1 : Number((up / down).toFixed(2)),
+              hitnruns: await getUserHitNRuns(user._id),
+              snatchCount: snatchesById.get(key) ?? 0,
+              uploadCount: uploadsById.get(key) ?? 0,
+            };
+          }),
+        );
+      },
     }),
   });
 

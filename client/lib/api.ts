@@ -54,6 +54,12 @@ export async function apiFetch<T>(
   });
 
   if (!response.ok) {
+    // The token is dead (expired, revoked, or signed out everywhere): drop
+    // the local session and bounce to login instead of leaving the user
+    // stranded behind failing requests.
+    if (response.status === 401 && auth !== false && getStoredSession()) {
+      handleExpiredSession();
+    }
     const text = await response.text();
     let message = text || `Request failed with status ${response.status}`;
     if (
@@ -98,6 +104,53 @@ export function canModerate(role?: AuthSession["role"] | string) {
 }
 
 export type AuthResponse = Omit<AuthSession, "role">;
+
+let expiredRedirectArmed = true;
+
+function isAuthPage(pathname: string) {
+  return (
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/register") ||
+    pathname.startsWith("/reset-password") ||
+    pathname.startsWith("/verify-email")
+  );
+}
+
+// Drops a dead local session and bounces to login once. Called on HTTP 401
+// and when the stored JWT is past its expiry, so expired sessions sign the
+// user out instead of stranding them.
+export function handleExpiredSession() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem("sq-session");
+  window.dispatchEvent(new Event("sq:session"));
+  if (!expiredRedirectArmed) return;
+  expiredRedirectArmed = false;
+  window.setTimeout(() => {
+    expiredRedirectArmed = true;
+  }, 5000);
+  if (isAuthPage(window.location.pathname)) return;
+  // Full reload on purpose: it drops all in-memory auth state (router.push
+  // would keep stale session context alive in already-mounted providers).
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+  window.location.href = "/login?expired=1";
+}
+
+export function isStoredSessionExpired(): boolean {
+  const stored = getStoredSession();
+  if (!stored?.token) return false;
+  try {
+    const encodedPayload = stored.token
+      .split(".")[1]
+      .replaceAll("-", "+")
+      .replaceAll("_", "/");
+    const payload = JSON.parse(atob(encodedPayload)) as { exp?: number };
+    return (
+      typeof payload.exp === "number" && payload.exp * 1000 <= Date.now()
+    );
+  } catch {
+    return false;
+  }
+}
 
 export function withRole(response: AuthResponse): AuthSession {
   try {

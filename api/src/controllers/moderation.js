@@ -62,6 +62,11 @@ export const fetchReport = async (req, res, next) => {
       return;
     }
 
+    if (!mongoose.isValidObjectId(req.params.reportId)) {
+      res.status(404).send("Report could not be found");
+      return;
+    }
+
     const report = await Report.findOne({ _id: req.params.reportId }).lean();
 
     if (!report) {
@@ -189,6 +194,11 @@ export const setReportResolved = async (req, res, next) => {
       return;
     }
 
+    if (!mongoose.isValidObjectId(req.params.reportId)) {
+      res.status(404).send("Report could not be found");
+      return;
+    }
+
     await Report.findOneAndUpdate(
       { _id: req.params.reportId },
       {
@@ -270,6 +280,11 @@ export const updateReport = async (req, res, next) => {
       return;
     }
 
+    if (!mongoose.isValidObjectId(req.params.reportId)) {
+      res.status(404).send("Report could not be found");
+      return;
+    }
+
     const update = {};
     if (req.body.reason !== undefined) {
       const reason = validateContentText(
@@ -315,6 +330,11 @@ export const deleteReport = async (req, res, next) => {
   try {
     if (!canModerate(req.userRole)) {
       res.status(401).send("You do not have permission to delete a report");
+      return;
+    }
+
+    if (!mongoose.isValidObjectId(req.params.reportId)) {
+      res.status(404).send("Report could not be found");
       return;
     }
 
@@ -435,7 +455,7 @@ export const getStats = (tracker) => async (req, res, next) => {
 
     res.json(await computeTrackerStats(tracker));
   } catch (e) {
-    console.error(e);
+    console.error("[sq] tracker stats failed:", e?.message ?? e);
     next(e);
   }
 };
@@ -460,7 +480,7 @@ export const refreshStats = (tracker) => async (req, res, next) => {
 
     res.json(await computeTrackerStats(tracker));
   } catch (e) {
-    console.error(e);
+    console.error("[sq] tracker stats refresh failed:", e?.message ?? e);
     next(e);
   }
 };
@@ -573,7 +593,12 @@ export const listCheatLog = async (req, res, next) => {
 
     const page = Math.max(parseInt(req.params.page, 10) || 0, 0);
     const perPage = 25;
-    const entries = await CheatLog.find({})
+    const reason =
+      typeof req.query.reason === "string" && req.query.reason.trim()
+        ? req.query.reason.trim().slice(0, 100)
+        : "";
+    const query = reason ? { reason } : {};
+    const entries = await CheatLog.find(query)
       .sort({ created: -1 })
       .skip(page * perPage)
       .limit(perPage)

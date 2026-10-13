@@ -8,6 +8,7 @@ http:
       middlewares:
         - api-prefix
         - apiHostHeaderSet
+        - secure-headers
       tls:
         certResolver: tlsresolver
     client:
@@ -17,6 +18,7 @@ http:
       rule: "Host(`example.com`) && PathPrefix(`/`)"
       middlewares:
         - clientHostHeaderSet
+        - secure-headers
       tls:
         certResolver: tlsresolver
   services:
@@ -33,6 +35,18 @@ http:
       stripPrefix:
         prefixes:
           - /api
+    # Baseline hardening headers. Referrer/Permissions policies ride along
+    # as custom response headers for compatibility with older Traefik 2.x.
+    secure-headers:
+      headers:
+        contentTypeNosniff: true
+        browserXssFilter: true
+        frameDeny: true
+        stsSeconds: 63072000
+        stsIncludeSubdomains: true
+        customResponseHeaders:
+          Referrer-Policy: "no-referrer"
+          Permissions-Policy: "camera=(), microphone=(), geolocation=(), browsing-topics=()"
     clientHostHeaderSet:
       headers:
         customRequestHeaders:

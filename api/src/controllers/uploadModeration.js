@@ -10,6 +10,7 @@ import {
 } from "../utils/contentLimits.js";
 import { sendSystemMessage } from "../utils/directMessage.js";
 import pushNotification from "../utils/notify.js";
+import pluginEvents from "../plugins/eventBus.js";
 import logAudit from "../utils/audit.js";
 import { canModerate } from "../utils/roles.js";
 
@@ -352,6 +353,19 @@ export const approveTorrentSubmission = async (req, res, next) => {
       return;
     }
     await notifyDecision(submission);
+    pluginEvents.emitDetached(
+      "torrent.created",
+      {
+        torrentId: torrent._id.toString(),
+        infoHash: submission.infoHash,
+        name: submission.name,
+        tags: [...(submission.tags ?? [])],
+        type: submission.type,
+        source: submission.source,
+        uploadedBy: submission.uploadedBy.toString(),
+      },
+      { userId: req.userId.toString() },
+    );
     res.json({ infoHash: submission.infoHash, status: submission.status });
   } catch (error) {
     if (approvalToken) {

@@ -1,5 +1,6 @@
 import express from "express";
 import ratelimit from "express-rate-limit";
+import { hasValidServerSecret } from "../middleware/auth.js";
 import {
   appealWarning,
   createApiToken,
@@ -14,6 +15,9 @@ import {
   revokeApiToken,
   rotateAnnounceUid,
   signOutEverywhere,
+  listSessions,
+  revokeSession,
+  getTotpStatus,
   getUserStats,
   getUserRole,
   getUserVerifiedEmailStatus,
@@ -41,7 +45,7 @@ const limiter = ratelimit({
   keyGenerator: (req) => {
     if (
       req.headers["x-forwarded-for"] &&
-      req.headers["x-sq-server-secret"] === process.env.SQ_SERVER_SECRET
+      hasValidServerSecret(req)
     ) {
       return req.headers["x-forwarded-for"].split(",")[0];
     }
@@ -68,10 +72,16 @@ export default (tracker, mail) => {
   router.delete("/tokens/:tokenId", limiter, revokeApiToken);
   router.post("/rotate-uid", limiter, rotateAnnounceUid);
   router.post("/sign-out-all", limiter, signOutEverywhere);
+  router.get("/sessions", limiter, listSessions);
+  router.delete("/sessions/:sessionId", limiter, revokeSession);
   router.get("/get-role", limiter, getUserRole);
   router.get("/get-verified", limiter, getUserVerifiedEmailStatus);
   router.post("/buy", limiter, buyItems);
   router.get("/totp/generate", limiter, generateTotpSecret);
+  // POST alias: password-gated 2FA setup must carry the current password in
+  // the request body, which browsers cannot send on a GET request.
+  router.post("/totp/generate", limiter, generateTotpSecret);
+  router.get("/totp/status", limiter, getTotpStatus);
   router.post("/totp/enable", limiter, enableTotp);
   router.post("/totp/disable", limiter, disableTotp);
   router.post("/delete", limiter, deleteAccount);

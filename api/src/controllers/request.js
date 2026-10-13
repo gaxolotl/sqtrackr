@@ -235,7 +235,7 @@ export const fetchRequest = async (req, res, next) => {
     }
     res.send(request);
   } catch (e) {
-    console.error(e);
+    console.error("[sq] request fetch failed:", e?.message ?? e);
     next(e);
   }
 };
@@ -323,6 +323,10 @@ export const addComment = async (req, res, next) => {
         { trim: false },
       );
       if (commentText === null) return;
+      if (!mongoose.isValidObjectId(req.params.requestId)) {
+        res.status(404).send("Request does not exist");
+        return;
+      }
       const request = await Request.findOne({
         _id: req.params.requestId,
       }).lean();
@@ -443,6 +447,11 @@ export const acceptCandidate = async (req, res, next) => {
         return;
       }
 
+      if (request.fulfilledBy) {
+        res.status(409).send("Request is already fulfilled");
+        return;
+      }
+
       const torrent = await Torrent.findOne({
         infoHash,
       }).lean();
@@ -463,10 +472,15 @@ export const acceptCandidate = async (req, res, next) => {
         return;
       }
 
-      await Request.findOneAndUpdate(
-        { _id: requestId },
-        { $set: { fulfilledBy: torrent._id } },
+      const fulfilledRequest = await Request.findOneAndUpdate(
+        { _id: requestId, fulfilledBy: null },
+        { $set: { fulfilledBy: torrent._id, bounty: 0 } },
       );
+
+      if (!fulfilledRequest) {
+        res.status(409).send("Request is already fulfilled");
+        return;
+      }
 
       await User.findOneAndUpdate(
         { _id: candidate.suggestedBy },

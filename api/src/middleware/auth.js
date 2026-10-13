@@ -2,6 +2,25 @@ import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import User from "../schema/user.js";
 import ApiToken from "../schema/apiToken.js";
+import Session from "../schema/session.js";
+import { SESSION_TOUCH_MS } from "../utils/sessions.js";
+
+// Constant-time comparison for the Next-SSR server secret. Length is
+// checked first because timingSafeEqual throws on mismatched lengths.
+// Shared by the auth middleware and the per-route rate-limit key
+// generators so forwarded-IP trust cannot be probed byte-by-byte.
+export const hasValidServerSecret = (req) => {
+  const presented = req.headers?.["x-sq-server-secret"];
+  const expected = process.env.SQ_SERVER_SECRET;
+  if (typeof presented !== "string" || typeof expected !== "string") {
+    return false;
+  }
+  if (!presented || !expected) return false;
+  const a = Buffer.from(presented);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+};
 
 const auth = async (req, res, next) => {
   if (req.headers.authorization) {
@@ -92,6 +111,32 @@ const auth = async (req, res, next) => {
           }
           req.userId = user._id;
           req.userRole = user.role;
+          // Per-device sessions: tokens minted before session tracking
+          // carry no jti and keep working; newer ones are revocable.
+          if (decoded.jti) {
+            const loginSession = await Session.findOne(
+              { jti: decoded.jti },
+              { userId: 1, revoked: 1, lastSeen: 1 },
+            ).lean();
+            if (
+              !loginSession ||
+              loginSession.revoked ||
+              String(loginSession.userId) !== String(user._id)
+            ) {
+              res.status(401).send("Invalid authentication token");
+              return;
+            }
+            req.sessionId = decoded.jti;
+            if (
+              !loginSession.lastSeen ||
+              Date.now() - loginSession.lastSeen > SESSION_TOUCH_MS
+            ) {
+              Session.updateOne(
+                { jti: decoded.jti },
+                { $set: { lastSeen: Date.now() } },
+              ).catch(() => {});
+            }
+          }
           next();
         } else {
           res.status(401).send("Invalid authentication token");
@@ -105,7 +150,7 @@ const auth = async (req, res, next) => {
     }
   } else if (
     req.headers["x-sq-public-access"] === "true" &&
-    req.headers["x-sq-server-secret"] === process.env.SQ_SERVER_SECRET
+    hasValidServerSecret(req)
   ) {
     next();
   } else {

@@ -12,7 +12,9 @@
   },
   "dependencies": {
     "@sqtrackr/plugin-collages": "workspace:*",
+    "@sqtrackr/plugin-member-ranks": "workspace:*",
     "@sqtrackr/plugin-reseed-radar": "workspace:*",
+    "@sqtrackr/plugin-upload-subscriptions": "workspace:*",
     "@sqtrackr/plugin-sdk": "workspace:*",
     "@sentry/node": "^7.36.0",
     "@sentry/tracing": "^7.120.4",

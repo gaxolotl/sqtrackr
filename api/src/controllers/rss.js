@@ -43,14 +43,43 @@ export const rssFeed = (tracker) => async (req, res, next) => {
 
   try {
     let user;
+    let usedCookieFallback = false;
     if (typeof token === "string" && token) {
+      // Token-first: the per-user token (?token=) is the primary path
+      // because feed readers cannot use the browser's local-storage JWT.
+      // Newly issued tokens match by sha256 hash while legacy plaintext
+      // tokens stored before hashing still match directly, so existing feed
+      // URLs keep working with no mass migration. A legacy match is
+      // accepted once, then auto-migrated to hash-only storage (never
+      // re-displayed); subsequent reads match by hash.
+      const tokenHash = hashRssToken(token);
       user = await User.findOne(
-        { rssToken: token },
-        { uid: 1, banned: 1 },
+        {
+          $or: [{ rssTokenHash: tokenHash }, { rssToken: token }],
+        },
+        { uid: 1, banned: 1, rssToken: 1, rssTokenHash: 1 },
       ).lean();
-    } else if (username && password) {
+      if (user && user.rssToken === token && user.rssTokenHash !== tokenHash) {
+        // Best-effort migration: must never break the feed read, so a
+        // failure is swallowed and retried on the next feed fetch.
+        void User.updateOne(
+          { _id: user._id },
+          { $set: { rssTokenHash: tokenHash }, $unset: { rssToken: 1 } },
+        ).catch(() => {});
+      }
+    } else if (
+      typeof username === "string" &&
+      typeof password === "string" &&
+      username &&
+      password
+    ) {
+      // DEPRECATED: username+password cookie fallback. The per-user token
+      // (?token=) is the primary path because feed readers cannot use the
+      // browser's local-storage JWT. This branch still works so existing
+      // clients do not break, but callers should migrate to token URLs.
       user = await User.findOne({ username }, { password: 1, uid: 1, banned: 1 }).lean();
       if (user && !(await bcrypt.compare(password, user.password))) user = null;
+      usedCookieFallback = !!user;
     }
 
     if (!user || user.banned) {
@@ -62,7 +91,9 @@ export const rssFeed = (tracker) => async (req, res, next) => {
       typeof query === "string" ? escapeRegex(query.slice(0, 200)) : "";
     const rssProjection = { name: 1, description: 1, infoHash: 1, size: 1 };
     let torrents;
-    if (query) {
+    // `query` arrives via the query parser: only honor plain
+    // strings so crafted objects cannot bypass the search branch.
+    if (typeof query === "string" && query) {
       torrents = await Torrent.find(
         {
           $or: [
@@ -92,6 +123,7 @@ export const rssFeed = (tracker) => async (req, res, next) => {
       .join("\n");
 
     res.setHeader("Content-Type", "application/rss+xml; charset=utf-8");
+    if (usedCookieFallback) res.setHeader("Deprecation", "true");
     res.status(200).send(`<?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0">
   <channel>
@@ -107,18 +139,44 @@ export const rssFeed = (tracker) => async (req, res, next) => {
 
 const createRssToken = () => crypto.randomBytes(32).toString("hex");
 
+const hashRssToken = (token) =>
+  crypto.createHash("sha256").update(token).digest("hex");
+
 export const getRssToken = async (req, res, next) => {
   try {
-    let user = await User.findById(req.userId, { rssToken: 1 });
+    const user = await User.findById(req.userId, {
+      rssToken: 1,
+      rssTokenHash: 1,
+    });
     if (!user) {
       res.status(404).send("User does not exist");
       return;
     }
-    if (!user.rssToken) {
-      user.rssToken = createRssToken();
-      await user.save();
+    // Legacy plaintext tokens are never re-displayed: hash the value and
+    // drop the plaintext so storage becomes hash-only from here on. The
+    // existing feed URL keeps working (feed reads verify via the hash);
+    // the RSS page prompts to regenerate for a fresh displayable URL.
+    if (user.rssToken) {
+      await User.updateOne(
+        { _id: user._id },
+        {
+          $set: { rssTokenHash: hashRssToken(user.rssToken) },
+          $unset: { rssToken: 1 },
+        },
+      );
+      res.json({ token: null });
+      return;
     }
-    res.json({ token: user.rssToken });
+    // Hash-only tokens cannot be revealed again: the plaintext was shown
+    // exactly once when it was created/regenerated.
+    if (user.rssTokenHash) {
+      res.json({ token: null });
+      return;
+    }
+    const plaintext = createRssToken();
+    user.rssTokenHash = hashRssToken(plaintext);
+    await user.save();
+    res.json({ token: plaintext });
   } catch (error) {
     next(error);
   }
@@ -126,17 +184,21 @@ export const getRssToken = async (req, res, next) => {
 
 export const regenerateRssToken = async (req, res, next) => {
   try {
-    const rssToken = createRssToken();
+    const plaintext = createRssToken();
     const user = await User.findByIdAndUpdate(
       req.userId,
-      { $set: { rssToken } },
+      {
+        $set: { rssTokenHash: hashRssToken(plaintext) },
+        $unset: { rssToken: 1 },
+      },
       { new: true },
     );
     if (!user) {
       res.status(404).send("User does not exist");
       return;
     }
-    res.json({ token: rssToken });
+    // Only the hash is stored; the plaintext is returned exactly once.
+    res.json({ token: plaintext });
   } catch (error) {
     next(error);
   }

@@ -44,6 +44,11 @@ const User = new mongoose.Schema({
   },
   avatarUpdated: Number,
   rssToken: { type: String, unique: true, sparse: true },
+  // sha256 hex of the RSS token. New/rotated tokens store only this hash;
+  // `rssToken` above is the legacy plaintext field, still honored on feed
+  // reads so existing feed URLs keep working. Both are sparse-unique and
+  // never required, so the change is default-safe for existing documents.
+  rssTokenHash: { type: String, unique: true, sparse: true },
 });
 
 User.index({ username: 1 });

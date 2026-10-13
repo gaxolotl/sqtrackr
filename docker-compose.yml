@@ -4,7 +4,10 @@ services:
     image: "traefik:v2.5"
     container_name: "sq_traefik"
     command:
-      - "--api.insecure=true"
+      # Dashboard/API listener. Disabled by default in production; set
+      # TRAEFIK_INSECURE_API=true in the shell environment for local
+      # debugging only. The port below stays loopback-bound either way.
+      - "--api.insecure=${TRAEFIK_INSECURE_API:-false}"
       - "--providers.file=true"
       - "--providers.file.filename=/config/traefik.yml"
       - "--entrypoints.webinsecure.address=:80"
@@ -18,9 +21,11 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080"
+      # Traefik dashboard/API runs with --api.insecure=true (no auth):
+      # keep it on loopback so it is not exposed to the network.
+      - "127.0.0.1:8080:8080"
     volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      # File provider only (--providers.file): no docker.sock mount needed.
       - ./letsencrypt:/letsencrypt
       - ./traefik.yml:/config/traefik.yml
 #  nginx:
@@ -43,6 +48,20 @@ services:
     image: ghcr.io/tdjsnelling/sqtracker-api:latest
     ports:
       - "127.0.0.1:3001:3001"
+    # Optional Sentry reporting. Leave SENTRY_DSN unset to run without it;
+    # the value comes from the shell environment (or a .env file), never
+    # from the image.
+    environment:
+      - SENTRY_DSN=${SENTRY_DSN:-}
+    # Auth transport note: browser JWTs travel via the `Authorization: Bearer`
+    # header only (client/lib/api.ts -> api/src/middleware/auth.js). RSS
+    # cookies carry a username/password or RSS token, never the JWT. JWT
+    # expiry is a hardcoded 7d in the API login/register handlers, not
+    # configurable from here.
+    # TODO(httpOnly-migration): move the browser session JWT into an
+    # HttpOnly + Secure + SameSite cookie set by the API (with CSRF
+    # protection and a localStorage compat window). Breaking change needing
+    # a coordinated API + client release; left for the auth owner.
     volumes:
       - type: bind
         source: ./config.js

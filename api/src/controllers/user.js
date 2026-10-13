@@ -20,6 +20,8 @@ import { isAdmin, VALID_ROLES, canModerate } from "../utils/roles.js";
 import { getContentLimits } from "../utils/contentLimits.js";
 import logAudit from "../utils/audit.js";
 import pushNotification from "../utils/notify.js";
+import { createLoginSession } from "../utils/sessions.js";
+import Session from "../schema/session.js";
 import Warning from "../schema/warning.js";
 
 const validatePasswordStrength = (password, res) => {
@@ -49,6 +51,131 @@ const isValidEmail = (email) => {
   if (!domain.includes(".")) return false;
   if (domain.startsWith(".") || domain.endsWith(".")) return false;
   if (domain.includes("..")) return false;
+  return true;
+};
+
+// Backup codes are single-use 2FA fallbacks. Only sha256 hashes touch the
+// database; the plaintext codes are shown to the user once at enrollment.
+// Hashes (64 lowercase hex chars) are also what makes single-use atomic: the
+// consume step matches the hash in the query filter and $pulls it in the
+// same findOneAndUpdate, so a concurrent loser finds nothing to match.
+// Plain 10-char codes never collide with the 64-char hash shape, which lets
+// the login path tell legacy plaintext entries apart from hashes.
+const hashBackupCode = (code) =>
+  crypto.createHash("sha256").update(code).digest("hex");
+const isBackupCodeHash = (value) =>
+  typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
+
+// Password changes, resets, and "sign out everywhere" must invalidate every
+// credential type. Rotating pwdVersion kills JWTs (see middleware/auth.js),
+// but personal API tokens ("sq_...") are deliberately NOT bound to
+// pwdVersion, so they must be revoked explicitly or a stolen token survives
+// password recovery forever. Sessions are revoked too so the device list
+// reflects reality instead of lingering until the MongoDB TTL fires.
+// Dummy bcrypt hash (hash of a placeholder secret) compared on the
+// unknown-user login path so missing-user and wrong-password timings match.
+// Without this, attackers can enumerate usernames via response timing.
+const DUMMY_BCRYPT_HASH =
+  "$2b$10$0sWAPAIMkFbf9ij7IYI76.k7VfDHCaLekALY.Pa6P8wHeavM1nUQK";
+
+// JWT `typ` separation: all tokens share SQ_JWT_SECRET, so each token carries
+// a `typ` claim at sign time ("auth" for 7d sessions, "email-verify",
+// "invite", "reset"). Full enforcement belongs in middleware/auth.js, which
+// should require decoded.typ === "auth" (allowing legacy tokens without `typ`
+// during rotation) — out of scope for this file, left for the index owner.
+// Within user.js we defensively reject tokens whose `typ` is present but
+// mismatched, so e.g. a reset token cannot double as an invite/email token.
+const rejectMismatchedTokenType = (decoded, expected) =>
+  decoded?.typ !== undefined && decoded.typ !== expected;
+
+// Step-up check for password-authenticated destructive actions. When TOTP is
+// enrolled, the current password alone is not enough: require a valid TOTP
+// token or a single-use backup code too. Returns true when satisfied,
+// otherwise sends the response and returns false. Backward compatible: users
+// without TOTP enrolled skip the check entirely. Backup-code consume mirrors
+// login: atomic findOneAndUpdate on the sha256 hash (plus a legacy plaintext
+// fallback with migration), so concurrent reuse leaves exactly one winner.
+const verifyTotpStepUp = async (user, code, res) => {
+  if (!user?.totp?.enabled) return true;
+  if (typeof code !== "string" || !code) {
+    res.status(401).send("One-time code required");
+    return false;
+  }
+  const validToken = speakeasy.totp.verify({
+    secret: user.totp.secret,
+    encoding: "base32",
+    token: code,
+    window: 1,
+  });
+  if (validToken) return true;
+  const consumed = await User.findOneAndUpdate(
+    { _id: user._id, "totp.backup": hashBackupCode(code) },
+    { $pull: { "totp.backup": hashBackupCode(code) } },
+  );
+  if (consumed) return true;
+  const legacyConsumed =
+    !isBackupCodeHash(code) &&
+    (await User.findOneAndUpdate(
+      { _id: user._id, "totp.backup": code },
+      { $pull: { "totp.backup": code } },
+    ));
+  if (!legacyConsumed) {
+    res.status(401).send("Invalid TOTP code");
+    return false;
+  }
+  const fresh = await User.findOne(
+    { _id: user._id },
+    { "totp.backup": 1 },
+  ).lean();
+  for (const remaining of fresh?.totp?.backup ?? []) {
+    if (isBackupCodeHash(remaining)) continue;
+    await User.updateOne(
+      { _id: user._id, "totp.backup": remaining },
+      {
+        $pull: { "totp.backup": remaining },
+        $addToSet: { "totp.backup": hashBackupCode(remaining) },
+      },
+    );
+  }
+  return true;
+};
+
+const revokeAllUserAuth = async (userId) => {
+  await Promise.all([
+    Session.updateMany(
+      { userId, revoked: { $ne: true } },
+      { $set: { revoked: true } },
+    ).catch(() => {}),
+    ApiToken.updateMany(
+      { userId, revoked: { $ne: true } },
+      { $set: { revoked: true } },
+    ).catch(() => {}),
+  ]);
+};
+
+// Re-authenticating with the current password before security-sensitive
+// changes (2FA enrollment/disable) ensures a hijacked session alone cannot
+// lock the real owner out. Returns true when verified, otherwise sends the
+// response and returns false.
+const verifyCurrentPassword = async (req, res) => {
+  const password = req.body?.password;
+  if (typeof password !== "string" || !password) {
+    res.status(400).send("Request must include password");
+    return false;
+  }
+  const user = await User.findOne(
+    { _id: req.userId },
+    { password: 1 },
+  ).lean();
+  if (!user) {
+    res.status(404).send("User does not exist");
+    return false;
+  }
+  const matches = await bcrypt.compare(password, user.password);
+  if (!matches) {
+    res.status(403).send("Incorrect password");
+    return false;
+  }
   return true;
 };
 
@@ -102,6 +229,13 @@ export const register = (mail) => async (req, res, next) => {
           }
           throw err;
         }
+        // Defensive typ check (see top of file): reject non-invite tokens
+        // that share SQ_JWT_SECRET. Missing `typ` is allowed for backward
+        // compatibility with pre-rotation invites.
+        if (rejectMismatchedTokenType(decoded, "invite")) {
+          res.status(403).send("Invitation is invalid or expired");
+          return;
+        }
         const { id } = decoded;
 
         invite = await Invite.findOne({ _id: id }).lean();
@@ -131,7 +265,7 @@ export const register = (mail) => async (req, res, next) => {
           return;
         }
 
-        inviter = await User.findOne({ _id: invitingUser }).lean();
+        inviter = await User.findOne({ _id: invitingUser }, { banned: 1, role: 1 }).lean();
         if (!inviter || inviter.banned) {
           res
             .status(403)
@@ -178,9 +312,12 @@ export const register = (mail) => async (req, res, next) => {
     let accountCreated = false;
 
     try {
-      const user = await User.findOne({
-        $or: [{ email: normalizedEmail }, { username: normalizedUsername }],
-      });
+      const user = await User.findOne(
+        {
+          $or: [{ email: normalizedEmail }, { username: normalizedUsername }],
+        },
+        { _id: 1 },
+      );
 
       if (!user) {
         if (!/^[a-z0-9.]+$/i.test(normalizedUsername)) {
@@ -261,6 +398,7 @@ export const register = (mail) => async (req, res, next) => {
           const emailVerificationValidUntil = created + 48 * 60 * 60 * 1000;
           const emailVerificationToken = jwt.sign(
             {
+              typ: "email-verify",
               user: normalizedEmail,
               validUntil: emailVerificationValidUntil,
             },
@@ -274,14 +412,17 @@ export const register = (mail) => async (req, res, next) => {
         }
 
         if (createdUser) {
+          const jti = await createLoginSession(req, newUser._id);
           res.send({
             token: jwt.sign(
               {
+                typ: "auth",
                 id: newUser._id,
                 username: newUser.username,
                 created,
                 role,
                 pwdVersion: newUser.pwdVersion,
+                jti,
               },
               process.env.SQ_JWT_SECRET,
               { expiresIn: "7d" },
@@ -342,16 +483,19 @@ export const login = async (req, res, next) => {
       }
 
       if (user) {
-        if (user.banned) {
-          const reason = user.banReason || "none";
-          res.status(403).send(`User is banned. Reason: ${reason}`);
-          return;
-        }
-
         const matches = await bcrypt.compare(req.body.password, user.password);
 
         if (!matches) {
-          res.status(401).send("Incorrect login details");
+          res.status(401).send("Invalid credentials");
+          return;
+        }
+
+        // Banned accounts get the same generic response as missing accounts
+        // and wrong passwords so unauthenticated callers cannot enumerate
+        // users or learn ban state. Ban reason stays visible only to
+        // already-authenticated paths (auth middleware 403, admin fetchUser).
+        if (user.banned) {
+          res.status(401).send("Invalid credentials");
           return;
         }
 
@@ -368,27 +512,68 @@ export const login = async (req, res, next) => {
           });
 
           if (!validToken) {
-            if (!(user.totp.backup ?? []).includes(req.body.totp)) {
-              res.status(401).send("Incorrect login details");
-              return;
-            } else {
-              await User.findOneAndUpdate(
-                { username: user.username },
-                { $pull: { "totp.backup": req.body.totp } },
-              );
+            const backupAttempt =
+              typeof req.body.totp === "string" ? req.body.totp : "";
+            // Atomic single-use consume: the hash must still be present for
+            // the update to match, so two concurrent logins with the same
+            // code leave exactly one winner.
+            const consumed = backupAttempt
+              ? await User.findOneAndUpdate(
+                  {
+                    _id: user._id,
+                    "totp.backup": hashBackupCode(backupAttempt),
+                  },
+                  { $pull: { "totp.backup": hashBackupCode(backupAttempt) } },
+                )
+              : null;
+            if (!consumed) {
+              // Legacy fallback: codes enrolled before hashing are stored in
+              // plaintext. Consume one atomically, then migrate whatever
+              // plaintext remains to hashes, one atomic $pull+$addToSet per
+              // code so concurrent consumes cannot be clobbered. Hash-shaped
+              // input never takes this path, so a leaked hash is not itself
+              // usable as a code.
+              const legacyConsumed =
+                backupAttempt && !isBackupCodeHash(backupAttempt)
+                  ? await User.findOneAndUpdate(
+                      { _id: user._id, "totp.backup": backupAttempt },
+                      { $pull: { "totp.backup": backupAttempt } },
+                    )
+                  : null;
+              if (!legacyConsumed) {
+                res.status(401).send("Incorrect login details");
+                return;
+              }
+              const fresh = await User.findOne(
+                { _id: user._id },
+                { "totp.backup": 1 },
+              ).lean();
+              for (const code of fresh?.totp?.backup ?? []) {
+                if (isBackupCodeHash(code)) continue;
+                await User.updateOne(
+                  { _id: user._id, "totp.backup": code },
+                  {
+                    $pull: { "totp.backup": code },
+                    $addToSet: { "totp.backup": hashBackupCode(code) },
+                  },
+                );
+              }
             }
           }
         }
 
         if (matches) {
+          const jti = await createLoginSession(req, user._id);
           res.send({
             token: jwt.sign(
               {
+                typ: "auth",
                 id: user._id,
                 username: user.username,
                 created: user.created,
                 role: user.role,
                 pwdVersion: user.pwdVersion,
+                jti,
               },
               process.env.SQ_JWT_SECRET,
               { expiresIn: "7d" },
@@ -398,10 +583,13 @@ export const login = async (req, res, next) => {
             username: user.username,
           });
         } else {
-          res.status(401).send("Incorrect login details");
+          res.status(401).send("Invalid credentials");
         }
       } else {
-        res.status(401).send("Incorrect login details");
+        // Dummy compare so unknown-user timing matches the wrong-password
+        // path (which always pays for one bcrypt.compare).
+        await bcrypt.compare(req.body.password, DUMMY_BCRYPT_HASH);
+        res.status(401).send("Invalid credentials");
       }
     } catch (e) {
       next(e);
@@ -466,7 +654,7 @@ export const generateInvite = (mail) => async (req, res, next) => {
     });
 
     invite.token = jwt.sign(
-      { id: invite._id, validUntil },
+      { typ: "invite", id: invite._id, validUntil },
       process.env.SQ_JWT_SECRET,
     );
 
@@ -507,13 +695,18 @@ export const fetchInvites = async (req, res, next) => {
 };
 
 export const changePassword = (mail) => async (req, res, next) => {
-  if (req.body.password && req.body.newPassword) {
+  if (
+    typeof req.body.password === "string" &&
+    req.body.password &&
+    typeof req.body.newPassword === "string" &&
+    req.body.newPassword
+  ) {
     try {
       const checked = validatePasswordStrength(req.body.newPassword, res);
       if (!checked) return;
       const user = await User.findOne(
         { _id: req.userId },
-        { password: 1, email: 1 },
+        { password: 1, email: 1, totp: 1 },
       ).lean();
 
       if (!user) {
@@ -528,6 +721,9 @@ export const changePassword = (mail) => async (req, res, next) => {
         return;
       }
 
+      // Step-up: password alone is not enough when TOTP is enrolled.
+      if (!(await verifyTotpStepUp(user, req.body.totp, res))) return;
+
       const hash = await bcrypt.hash(checked, 10);
 
       await User.findOneAndUpdate(
@@ -536,9 +732,14 @@ export const changePassword = (mail) => async (req, res, next) => {
           $set: {
             password: hash,
             pwdVersion: crypto.randomBytes(24).toString("hex"),
+            pwdVersionUpdatedAt: Date.now(),
           },
         },
       );
+      // The caller's own JWT dies with the pwdVersion rotation above; revoke
+      // everything else (other devices, API tokens) so a compromised
+      // credential cannot survive a password change.
+      await revokeAllUserAuth(req.userId);
 
       if (!envFlag("SQ_DISABLE_EMAIL")) {
         await mail.sendMail({
@@ -573,7 +774,10 @@ export const initiatePasswordReset = (mail) => async (req, res, next) => {
       }
       const normalizedEmail = normalizeEmail(req.body.email);
 
-      const user = await User.findOne({ email: normalizedEmail }).lean();
+      const user = await User.findOne(
+        { email: normalizedEmail },
+        { email: 1, pwdVersion: 1 },
+      ).lean();
 
       if (!user) {
         res.sendStatus(200);
@@ -582,6 +786,7 @@ export const initiatePasswordReset = (mail) => async (req, res, next) => {
 
       const token = jwt.sign(
         {
+          typ: "reset",
           user: normalizedEmail,
           validUntil: Date.now() + 24 * 60 * 60 * 1000,
           key: user.pwdVersion,
@@ -629,59 +834,66 @@ export const finalisePasswordReset = async (req, res, next) => {
       if (!checked) return;
       const normalizedEmail = normalizeEmail(email);
 
-      const user = await User.findOne({ email: normalizedEmail }).lean();
-
-      if (!user) {
-        res.status(404).send("User does not exist");
-        return;
-      }
-
-      let tokenEmail;
-      let validUntil;
-      let key;
+      // Verify the token and load the user on every request so the
+      // unknown-email and bad-token paths do identical work and return an
+      // identical generic 403 (same status + message + timing). Distinct
+      // "already used"/"expired" messages would reintroduce the oracle, so
+      // all reset failures share one message without breaking the valid flow.
+      let decoded = null;
       try {
-        ({
-          user: tokenEmail,
-          validUntil,
-          key,
-        } = jwt.verify(token, process.env.SQ_JWT_SECRET));
+        decoded = jwt.verify(token, process.env.SQ_JWT_SECRET);
       } catch (err) {
         if (
           err?.name === "JsonWebTokenError" ||
           err?.name === "TokenExpiredError"
         ) {
-          res.status(403).send("Token is invalid");
-          return;
+          decoded = null;
+        } else {
+          throw err;
         }
-        throw err;
       }
 
-      if (tokenEmail !== normalizedEmail) {
+      const user = await User.findOne(
+        { email: normalizedEmail },
+        { pwdVersion: 1 },
+      ).lean();
+
+      if (
+        !decoded ||
+        !user ||
+        rejectMismatchedTokenType(decoded, "reset") ||
+        decoded.user !== normalizedEmail ||
+        typeof decoded.validUntil !== "number" ||
+        decoded.validUntil < Date.now() ||
+        decoded.key !== user.pwdVersion
+      ) {
         res.status(403).send("Token is invalid");
-        return;
-      }
-
-      if (key !== user.pwdVersion) {
-        res.status(403).send("Token has already been used");
-        return;
-      }
-
-      if (validUntil < Date.now()) {
-        res.status(403).send("Token has expired");
         return;
       }
 
       const newHash = await bcrypt.hash(checked, 10);
 
-      await User.findOneAndUpdate(
-        { _id: user._id },
+      const newPwdVersion = crypto.randomBytes(24).toString("hex");
+      // Atomic check-then-set: the update only matches the pwdVersion the
+      // token was issued against. Concurrent reuse leaves exactly one winner;
+      // the loser gets null and sees the same generic invalid-token response.
+      const updated = await User.findOneAndUpdate(
+        { _id: user._id, pwdVersion: decoded.key },
         {
           $set: {
             password: newHash,
-            pwdVersion: crypto.randomBytes(24).toString("hex"),
+            pwdVersion: newPwdVersion,
+            pwdVersionUpdatedAt: Date.now(),
           },
         },
       );
+      if (!updated) {
+        res.status(403).send("Token is invalid");
+        return;
+      }
+      // Single-use reset token (the old pwdVersion-as-key no longer matches),
+      // plus explicit revocation so credentials stolen before the reset die.
+      await revokeAllUserAuth(user._id);
 
       res.sendStatus(200);
     } catch (e) {
@@ -1005,7 +1217,10 @@ export const getUserStats = async (req, res, next) => {
 
 export const getDashboard = async (req, res, next) => {
   try {
-    const user = await User.findOne({ _id: req.userId }).lean();
+    const user = await User.findOne(
+      { _id: req.userId },
+      { bonusPoints: 1 },
+    ).lean();
     if (!user) {
       res.status(404).send("User does not exist");
       return;
@@ -1279,7 +1494,57 @@ export const signOutEverywhere = async (req, res, next) => {
         },
       },
     );
+    await revokeAllUserAuth(req.userId);
     res.sendStatus(200);
+  } catch (e) {
+    next(e);
+  }
+};
+
+const sessionDto = (session, currentJti) => ({
+  id: session._id.toString(),
+  device: session.device ?? "Unknown device",
+  ip: session.ip ?? null,
+  created: session.created,
+  lastSeen: session.lastSeen,
+  revoked: Boolean(session.revoked),
+  current: Boolean(currentJti && session.jti === currentJti),
+});
+
+export const listSessions = async (req, res, next) => {
+  try {
+    const sessions = await Session.find({ userId: req.userId })
+      .select("jti device ip created lastSeen revoked")
+      .sort({ lastSeen: -1, _id: -1 })
+      .limit(50)
+      .lean();
+    res.json({
+      sessions: sessions.map((session) =>
+        sessionDto(session, req.sessionId),
+      ),
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const revokeSession = async (req, res, next) => {
+  try {
+    const { sessionId } = req.params;
+    if (!mongoose.isValidObjectId(sessionId)) {
+      res.status(400).send("Invalid session id");
+      return;
+    }
+    const revoked = await Session.findOneAndUpdate(
+      { _id: sessionId, userId: req.userId, revoked: { $ne: true } },
+      { $set: { revoked: true } },
+      { new: true },
+    ).lean();
+    if (!revoked) {
+      res.status(404).send("Session does not exist");
+      return;
+    }
+    res.json(sessionDto(revoked, req.sessionId));
   } catch (e) {
     next(e);
   }
@@ -1304,13 +1569,9 @@ export const getUserVerifiedEmailStatus = async (req, res, next) => {
 export const verifyUserEmail = async (req, res, next) => {
   if (req.body.token) {
     try {
-      let email;
-      let validUntil;
+      let decoded;
       try {
-        ({ user: email, validUntil } = jwt.verify(
-          req.body.token,
-          process.env.SQ_JWT_SECRET,
-        ));
+        decoded = jwt.verify(req.body.token, process.env.SQ_JWT_SECRET);
       } catch (err) {
         if (
           err?.name === "JsonWebTokenError" ||
@@ -1322,12 +1583,20 @@ export const verifyUserEmail = async (req, res, next) => {
         throw err;
       }
 
+      // Defensive typ check (see top of file): reject non-email-verify tokens
+      // sharing SQ_JWT_SECRET. Missing `typ` allowed for backward compat.
+      if (rejectMismatchedTokenType(decoded, "email-verify")) {
+        res.status(403).send("Token is invalid");
+        return;
+      }
+      const { user: email, validUntil } = decoded;
+
       if (validUntil < Date.now()) {
         res.status(403).send("Token has expired");
         return;
       }
 
-      const user = await User.findOne({ email }).lean();
+      const user = await User.findOne({ email }, { emailVerified: 1 }).lean();
 
       if (!user) {
         res.status(404).send("User does not exist");
@@ -1357,7 +1626,15 @@ export const banUser = async (req, res, next) => {
       return;
     }
 
-    const user = await User.findOne({ username: req.params.username });
+    if (req.params.username === "admin") {
+      res.status(403).send("Primary admin account cannot be banned");
+      return;
+    }
+
+    const user = await User.findOne(
+      { username: req.params.username },
+      { _id: 1 },
+    ).lean();
     if (!user) {
       res.status(404).send("User does not exist");
       return;
@@ -1516,7 +1793,10 @@ export const unbanUser = async (req, res, next) => {
       return;
     }
 
-    const user = await User.findOne({ username: req.params.username });
+    const user = await User.findOne(
+      { username: req.params.username },
+      { _id: 1 },
+    ).lean();
     if (!user) {
       res.status(404).send("User does not exist");
       return;
@@ -1547,7 +1827,10 @@ export const setUserRole = async (req, res, next) => {
       return;
     }
 
-    const user = await User.findOne({ username: req.params.username });
+    const user = await User.findOne(
+      { username: req.params.username },
+      { _id: 1, username: 1, role: 1 },
+    ).lean();
     if (!user) {
       res.status(404).send("User does not exist");
       return;
@@ -1561,6 +1844,16 @@ export const setUserRole = async (req, res, next) => {
     if (user._id.toString() === req.userId.toString() && role !== "admin") {
       res.status(403).send("You cannot remove your own admin role");
       return;
+    }
+
+    // Demoting any admin when only one remains would leave the tracker
+    // with no administrator, so block removing the last admin account.
+    if (user.role === "admin" && role !== "admin") {
+      const adminCount = await User.countDocuments({ role: "admin" });
+      if (adminCount <= 1) {
+        res.status(403).send("Cannot remove the last admin");
+        return;
+      }
     }
 
     await User.findOneAndUpdate({ _id: user._id }, { $set: { role } });
@@ -1682,8 +1975,25 @@ export const appealWarning = async (req, res, next) => {
   }
 };
 
+export const getTotpStatus = async (req, res, next) => {
+  try {
+    const user = await User.findOne(
+      { _id: req.userId },
+      { "totp.enabled": 1 },
+    ).lean();
+    if (!user) {
+      res.status(404).send("User does not exist");
+      return;
+    }
+    res.json({ enabled: Boolean(user?.totp?.enabled) });
+  } catch (e) {
+    next(e);
+  }
+};
+
 export const generateTotpSecret = async (req, res, next) => {
   try {
+    if (!(await verifyCurrentPassword(req, res))) return;
     const user = await User.findOne(
       { _id: req.userId },
       { totp: 1, username: 1 },
@@ -1719,6 +2029,7 @@ export const generateTotpSecret = async (req, res, next) => {
 export const enableTotp = async (req, res, next) => {
   if (req.body.token) {
     try {
+      if (!(await verifyCurrentPassword(req, res))) return;
       const user = await User.findOne(
         { _id: req.userId },
         { totp: 1 },
@@ -1749,7 +2060,7 @@ export const enableTotp = async (req, res, next) => {
         {
           $set: {
             "totp.enabled": true,
-            "totp.backup": backupCodes,
+            "totp.backup": backupCodes.map(hashBackupCode),
           },
         },
       );
@@ -1766,6 +2077,7 @@ export const enableTotp = async (req, res, next) => {
 export const disableTotp = async (req, res, next) => {
   if (req.body.token) {
     try {
+      if (!(await verifyCurrentPassword(req, res))) return;
       const user = await User.findOne(
         { _id: req.userId },
         { totp: 1 },
@@ -1805,11 +2117,11 @@ export const disableTotp = async (req, res, next) => {
 };
 
 export const deleteAccount = async (req, res, next) => {
-  if (req.body.password) {
+  if (typeof req.body.password === "string" && req.body.password) {
     try {
       const user = await User.findOne(
         { _id: req.userId },
-        { password: 1, username: 1 },
+        { password: 1, username: 1, totp: 1 },
       ).lean();
 
       if (!user) {
@@ -1829,7 +2141,18 @@ export const deleteAccount = async (req, res, next) => {
         return;
       }
 
+      // Step-up: password alone is not enough when TOTP is enrolled.
+      if (!(await verifyTotpStepUp(user, req.body.totp, res))) return;
+
       await User.deleteOne({ _id: req.userId });
+
+      // Best-effort orphan cleanup: sessions and API tokens reference the
+      // deleted user and would otherwise linger until TTL/revocation sweeps.
+      // Cleanup failures must not fail the deletion itself.
+      await Promise.all([
+        Session.deleteMany({ userId: req.userId }).catch(() => {}),
+        ApiToken.deleteMany({ userId: req.userId }).catch(() => {}),
+      ]);
 
       res.sendStatus(200);
     } catch (e) {
