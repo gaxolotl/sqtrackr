@@ -10,4 +10,7 @@ const ApiToken = new mongoose.Schema({
   revoked: Boolean,
 });
 
+ApiToken.index({ tokenHash: 1 }, { unique: true });
+ApiToken.index({ userId: 1, revoked: 1 });
+
 export default mongoose.model("apiToken", ApiToken);

@@ -21,5 +21,7 @@ const Progress = new mongoose.Schema(
 Progress.index({ userId: 1 });
 Progress.index({ infoHash: 1, peerId: 1 });
 Progress.index({ userId: 1, left: 1 });
+Progress.index({ userId: 1, infoHash: 1 });
+Progress.index({ userId: 1, infoHash: 1, peerId: 1 });
 
 export default mongoose.model("progress", Progress);

@@ -11,4 +11,7 @@ const Invite = new mongoose.Schema({
   reserved: Boolean,
 });
 
+Invite.index({ invitingUser: 1 });
+Invite.index({ validUntil: 1 });
+
 export default mongoose.model("invite", Invite);

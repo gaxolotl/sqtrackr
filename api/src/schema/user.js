@@ -53,6 +53,6 @@ const User = new mongoose.Schema({
 
 User.index({ username: 1 }, { unique: true });
 User.index({ email: 1 }, { unique: true });
-User.index({ uid: 1 });
+User.index({ uid: 1 }, { unique: true, sparse: true });
 
 export default mongoose.model("user", User);

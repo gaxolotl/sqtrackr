@@ -13,4 +13,6 @@ const Warning = new mongoose.Schema({
   },
 });
 
+Warning.index({ userId: 1, created: -1 });
+
 export default mongoose.model("warning", Warning);

@@ -8,4 +8,7 @@ const Snatch = new mongoose.Schema({
   completed: Boolean,
 });
 
+Snatch.index({ userId: 1, infoHash: 1 }, { unique: true, sparse: true });
+Snatch.index({ userId: 1 });
+
 export default mongoose.model("snatch", Snatch);

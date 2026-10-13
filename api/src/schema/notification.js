@@ -9,4 +9,7 @@ const Notification = new mongoose.Schema({
   created: Number,
 });
 
+Notification.index({ userId: 1, created: -1 });
+Notification.index({ userId: 1, read: 1 });
+
 export default mongoose.model("notification", Notification);

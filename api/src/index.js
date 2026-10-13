@@ -68,6 +68,9 @@ import ApiToken from "./schema/apiToken.js";
 import Notification from "./schema/notification.js";
 import Snatch from "./schema/snatch.js";
 import Warning from "./schema/warning.js";
+import Invite from "./schema/invite.js";
+import AuditLog from "./schema/auditLog.js";
+import CheatLog from "./schema/cheatLog.js";
 
 mongoose.set("strictQuery", true);
 
@@ -161,6 +164,9 @@ validateConfig(config)
             Notification.init(),
             Snatch.init(),
             Warning.init(),
+            Invite.init(),
+            AuditLog.init(),
+            CheatLog.init(),
           ]);
           await loadRuntimeSettings();
           await createAdminUser(mail);

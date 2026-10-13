@@ -8,4 +8,6 @@ const AuditLog = new mongoose.Schema({
   created: Number,
 });
 
+AuditLog.index({ created: -1 });
+
 export default mongoose.model("auditLog", AuditLog);
