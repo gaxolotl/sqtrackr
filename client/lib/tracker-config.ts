@@ -2,7 +2,7 @@ import type { TrackerConfig } from "@/lib/types";
 
 export const FALLBACK_TRACKER_CONFIG: TrackerConfig = {
   siteName: "sqtracker demo",
-  siteDescription: "A focused, private BitTorrent tracker.",
+  siteDescription: "A short description for your tracker site",
   showPageInTitle: true,
   contentCentered: false,
   contentMaxWidth: 1040,
@@ -19,7 +19,8 @@ export const FALLBACK_TRACKER_CONFIG: TrackerConfig = {
     torrentTags: 500,
     torrentFileSizeKb: 1024,
   },
-  allowRegister: "open",
+  // Fail-closed when the API is unreachable: do not advertise open registration.
+  allowRegister: "closed",
   allowAnonymousUploads: false,
   torrentPremoderation: false,
   categories: {

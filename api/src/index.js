@@ -331,6 +331,9 @@ validateConfig(config)
 
     // Public, read-only configuration used by the Next.js client. Never expose
     // secrets, SMTP settings, or database credentials here.
+    // Intentionally not public: economy/HnR/blacklists (SQ_MINIMUM_RATIO,
+    // SQ_MAXIMUM_HIT_N_RUNS, SQ_MIN_SEEDTIME_HOURS, SQ_HNR_GRACE_HOURS,
+    // SQ_BP_*, SQ_EXTENSION/CLIENT_BLACKLIST) are admin-only via /admin/settings.
     app.get("/config", (req, res) => {
       const parseJson = (value, fallback) => {
         if (!value) return fallback;

@@ -493,6 +493,7 @@ export function SettingsPage() {
                     type="number"
                     step="0.01"
                     min="-1"
+                    max="100"
                     defaultValue={settings.data.SQ_MINIMUM_RATIO}
                     required
                   />
@@ -502,6 +503,7 @@ export function SettingsPage() {
                     name="SQ_MAXIMUM_HIT_N_RUNS"
                     type="number"
                     min="-1"
+                    max="10000"
                     defaultValue={settings.data.SQ_MAXIMUM_HIT_N_RUNS}
                     required
                   />
@@ -511,6 +513,7 @@ export function SettingsPage() {
                     name="SQ_MIN_SEEDTIME_HOURS"
                     type="number"
                     min="0"
+                    max="8760"
                     defaultValue={settings.data.SQ_MIN_SEEDTIME_HOURS}
                     required
                   />
@@ -520,6 +523,7 @@ export function SettingsPage() {
                     name="SQ_HNR_GRACE_HOURS"
                     type="number"
                     min="0"
+                    max="8760"
                     defaultValue={settings.data.SQ_HNR_GRACE_HOURS}
                     required
                   />
@@ -572,7 +576,7 @@ export function SettingsPage() {
                         <input
                           aria-label={`Category ${index + 1} name`}
                           value={category.name}
-                          maxLength={60}
+                          maxLength={50}
                           onChange={(event) => {
                             const name = event.target.value;
                             setCategories((current) =>
@@ -672,7 +676,7 @@ export function SettingsPage() {
                         <input
                           aria-label={`New source for ${category.name || "category"}`}
                           placeholder="New source"
-                          maxLength={60}
+                          maxLength={100}
                           value={newSource[index] ?? ""}
                           onChange={(event) =>
                             setNewSource((current) => ({
@@ -720,7 +724,7 @@ export function SettingsPage() {
                     <input
                       aria-label="New category name"
                       placeholder="New category"
-                      maxLength={60}
+                      maxLength={50}
                       value={newCategory}
                       onChange={(event) => setNewCategory(event.target.value)}
                       onKeyDown={(event) => {
@@ -887,6 +891,7 @@ export function SettingsPage() {
                     name="SQ_BP_EARNED_PER_GB"
                     type="number"
                     min="0"
+                    max="100000"
                     step="0.01"
                     defaultValue={settings.data.SQ_BP_EARNED_PER_GB}
                     required
@@ -897,6 +902,7 @@ export function SettingsPage() {
                     name="SQ_BP_EARNED_PER_FILLED_REQUEST"
                     type="number"
                     min="0"
+                    max="100000"
                     step="0.01"
                     defaultValue={settings.data.SQ_BP_EARNED_PER_FILLED_REQUEST}
                     required
@@ -907,6 +913,7 @@ export function SettingsPage() {
                     name="SQ_BP_COST_PER_INVITE"
                     type="number"
                     min="0"
+                    max="100000"
                     step="0.01"
                     defaultValue={settings.data.SQ_BP_COST_PER_INVITE}
                     required
@@ -917,6 +924,7 @@ export function SettingsPage() {
                     name="SQ_BP_COST_PER_GB"
                     type="number"
                     min="0"
+                    max="100000"
                     step="0.01"
                     defaultValue={settings.data.SQ_BP_COST_PER_GB}
                     required

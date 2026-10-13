@@ -10,16 +10,20 @@ module.exports = {
     SQ_SITE_DESCRIPTION: "A short description for your tracker site",
 
     // Whether browser tab titles include the localized current page name.
+    // Runtime (admin /admin/settings) — no restart.
     SQ_SHOW_PAGE_IN_TITLE: true,
 
     // Optionally center page content and control its maximum desktop width.
+    // Runtime (admin /admin/settings) — no restart.
     SQ_CONTENT_CENTERED: false,
     SQ_CONTENT_MAX_WIDTH: 1040,
 
     // Show matched movie and TV titles instead of full torrent release names.
+    // Runtime (admin /admin/settings) — no restart.
     SQ_SHORTEN_MATCHED_TORRENT_NAMES: true,
 
     // Runtime limits for user-created content and uploaded .torrent metadata files.
+    // Runtime (admin /admin/settings) — no restart.
     SQ_TORRENT_NAME_MAX_LENGTH: 500,
     SQ_CONTENT_TITLE_MAX_LENGTH: 200,
     SQ_CONTENT_BODY_MAX_LENGTH: 50000,
