@@ -15,6 +15,10 @@ import type { TrackerConfig } from "@/lib/types";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  title: {
+    default: "sqtrackr",
+    template: "%s • sqtrackr",
+  },
   description: "A focused, private torrent tracker.",
   appleWebApp: {
     capable: true,

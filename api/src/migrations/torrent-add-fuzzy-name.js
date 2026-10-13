@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
-import { createNGrams } from "mongoose-fuzzy-searching/helpers";
-import Torrent from "../schema/torrent";
-import config from "../../../config";
+import { createNGrams } from "mongoose-fuzzy-searching/helpers/index.js";
+import Torrent from "../schema/torrent.js";
+import config from "../../../config.js";
 
 (async () => {
   await mongoose.connect(config.envs.SQ_MONGO_URL);

@@ -7,7 +7,8 @@ import type { NextRequest } from "next/server";
 // framework scripts. Style attributes (theme vars in app/layout.tsx) still
 // need 'unsafe-inline'; scripts are nonce-gated with strict-dynamic.
 export function proxy(request: NextRequest) {
-  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  const nonce = btoa(String.fromCharCode(...bytes));
   const isDev = process.env.NODE_ENV === "development";
   const apiOrigin = (process.env.NEXT_PUBLIC_API_URL ?? "").trim().replace(/\/+$/, "");
   const connectSrc = [
@@ -32,7 +33,6 @@ export function proxy(request: NextRequest) {
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
-  requestHeaders.set("Content-Security-Policy", cspHeader);
 
   const response = NextResponse.next({
     request: {

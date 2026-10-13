@@ -9,9 +9,11 @@ export function useModerationQueue(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
     let active = true;
+    let inFlight = false;
 
     async function refresh() {
-      if (document.hidden) return;
+      if (document.hidden || inFlight) return;
+      inFlight = true;
       try {
         const result = await apiFetch<{
           pendingSubmissions?: number;
@@ -24,6 +26,8 @@ export function useModerationQueue(enabled: boolean) {
         setTotal(Number.isFinite(next) ? Math.max(0, next) : 0);
       } catch {
         // Queue polling must never disrupt the surrounding application shell.
+      } finally {
+        inFlight = false;
       }
     }
 
