@@ -5,6 +5,7 @@
 .github
 data
 letsencrypt
+# config.js is mount-provided at runtime (see compose volumes); never baked.
 config.js
 .env*
 *.md

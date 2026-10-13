@@ -8,6 +8,7 @@
     "dev": "bun --watch src/index.js",
     "start": "bun src/index.js",
     "test": "bun test",
+    "lint": "eslint .",
     "migration:torrent-add-fuzzy-name": "bun src/migrations/torrent-add-fuzzy-name.js"
   },
   "dependencies": {

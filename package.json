@@ -17,7 +17,8 @@
     "client:dev": "bun run --filter @sqtracker/client dev",
     "dev": "bun run --parallel api:dev client:dev",
     "client:build": "bun run --filter @sqtracker/client build",
-    "lint": "prettier --write --ignore-path=.eslintignore \"**/*.{js,json}\""
+    "lint": "prettier --check \"**/*.{js,mjs,ts,tsx,json,css,md}\"",
+    "format": "prettier --write \"**/*.{js,mjs,ts,tsx,json,css,md}\""
   },
   "devDependencies": {
     "prettier": "^3.8.4"
@@ -31,6 +32,7 @@
     "bufferutil",
     "core-js",
     "es5-ext",
+    "sharp",
     "unrs-resolver",
     "utf-8-validate"
   ]
