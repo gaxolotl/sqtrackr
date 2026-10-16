@@ -1,0 +1,7 @@
+socket_workers = 4
+log_level = "error"
+[network]
+use_ipv4 = true
+use_ipv6 = false
+address_ipv4 = "0.0.0.0:3100"
+socket_recv_buffer_size = 8000000

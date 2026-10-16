@@ -76,6 +76,13 @@ export const findWsAuthUser = async (uid) => {
 
 export const createTrackerFilter = () => async (infoHash, params, cb) => {
   try {
+    // Bench escape-hatch: allow any info_hash without Mongo so the
+    // swarm engine can be compared fairly against open trackers.
+    // Never enable in production; real announces must be registered.
+    if (process.env.SQ_TRACKER_BENCH_ALLOW_ANY === "true") {
+      cb(null);
+      return;
+    }
     const type = params?.type;
     if (type === "http" || !type) {
       cb(null);

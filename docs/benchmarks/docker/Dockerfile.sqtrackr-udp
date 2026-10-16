@@ -1,0 +1,7 @@
+FROM oven/bun:1.4.2
+WORKDIR /bench
+COPY api/benchmark/udp-engine.js ./udp-engine.js
+RUN bun add bittorrent-tracker@9.19.0
+ENV BENCH_UDP_PORT=6970
+EXPOSE 6970/udp
+CMD ["bun", "udp-engine.js"]
