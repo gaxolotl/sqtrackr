@@ -25,6 +25,7 @@ RUN bun install --frozen-lockfile --production
 COPY . .
 WORKDIR /sqtracker/api
 EXPOSE 3001
+EXPOSE 6969/udp
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD bun -e "fetch('http://localhost:3001/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 USER bun
 CMD ["bun", "src/index.js"]

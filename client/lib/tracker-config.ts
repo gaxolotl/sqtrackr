@@ -43,6 +43,12 @@ export const FALLBACK_TRACKER_CONFIG: TrackerConfig = {
   announcementsEnabled: true,
   rssEnabled: true,
   trackerUrl: "",
+  trackerOpen: false,
+  trackerUdpEnabled: false,
+  trackerUdpUrl: "",
+  trackerWsEnabled: false,
+  trackerWsUrl: "",
+  trackerPersistEnabled: true,
 };
 
 export function mergeTrackerConfig(config?: Partial<TrackerConfig>) {

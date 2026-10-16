@@ -78,6 +78,13 @@ const configSchema = yup
         SQ_BP_COST_PER_INVITE: yup.number().min(0).max(100000).required(),
         SQ_BP_COST_PER_GB: yup.number().min(0).max(100000).required(),
         SQ_SITE_WIDE_FREELEECH: yup.boolean().required(),
+        SQ_TRACKER_OPEN: yup.boolean(),
+        SQ_TRACKER_ANON_REQUIRE_FREELEECH: yup.boolean(),
+        SQ_TRACKER_UDP_ENABLED: yup.boolean(),
+        SQ_TRACKER_UDP_PORT: yup.number().integer().min(1).max(65535),
+        SQ_TRACKER_WS_ENABLED: yup.boolean(),
+        SQ_TRACKER_PERSIST_ENABLED: yup.boolean(),
+        SQ_TRACKER_PERSIST_INTERVAL_SEC: yup.number().integer().min(10).max(3600),
         SQ_TORRENT_CATEGORIES: yup.lazy((value) =>
           torrentCategoriesSchema(value),
         ),

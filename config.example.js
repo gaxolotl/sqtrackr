@@ -106,6 +106,36 @@ module.exports = {
     // Whether to enable freeleech on all torrents.
     SQ_SITE_WIDE_FREELEECH: false,
 
+    // Open-tracker gate for unauthenticated UDP/WebSocket announces.
+    // HTTP /announce/:uid stays private and fully accounted. When true,
+    // UDP and WebSocket peers may join swarms for known torrents without a
+    // user uid. Authenticated WebSocket URLs (/ws?uid=<uid>) bypass the gate.
+    // Runtime (admin /admin/settings) — no restart.
+    SQ_TRACKER_OPEN: false,
+
+    // When true (default), anonymous UDP/WebSocket announces are only
+    // allowed for freeleech torrents (per-torrent flag or site-wide
+    // freeleech). When false, any known torrent is allowed while open.
+    // Runtime (admin /admin/settings) — no restart.
+    SQ_TRACKER_ANON_REQUIRE_FREELEECH: true,
+
+    // Native UDP tracker (BEP 15). Requires opening the UDP port on the
+    // host/proxy; Traefik HTTP routing cannot forward it.
+    // Restart-only — changing needs an API restart.
+    SQ_TRACKER_UDP_ENABLED: false,
+    SQ_TRACKER_UDP_PORT: 6969,
+
+    // WebTorrent WebSocket tracker on the API HTTP server at /ws.
+    // Expose it through Traefik/Nginx (see traefik.yml/nginx.conf).
+    // Restart-only — changing needs an API restart.
+    SQ_TRACKER_WS_ENABLED: false,
+
+    // Persist in-memory swarms to MongoDB and restore them on restart so
+    // scrape counts survive deploys. Snapshot interval in seconds.
+    // Restart-only — changing needs an API restart.
+    SQ_TRACKER_PERSIST_ENABLED: true,
+    SQ_TRACKER_PERSIST_INTERVAL_SEC: 60,
+
     // Whether torrent pages can be viewed by unregistered users.
     // If true, only logged-in users will be able to download/interact, but anyone (search engines included) will be able to view/read torrent info.
     // Non-logged-in users will also be able to browse category/tag pages and wiki pages that have been set to public.

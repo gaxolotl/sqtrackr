@@ -344,6 +344,12 @@ export type TrackerConfig = {
   announcementsEnabled: boolean;
   rssEnabled: boolean;
   trackerUrl: string;
+  trackerOpen?: boolean;
+  trackerUdpEnabled?: boolean;
+  trackerUdpUrl?: string;
+  trackerWsEnabled?: boolean;
+  trackerWsUrl?: string;
+  trackerPersistEnabled?: boolean;
 };
 
 export type WikiPage = {

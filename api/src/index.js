@@ -53,6 +53,18 @@ import { getTrackerBaseUrl } from "./utils/trackerUrl.js";
 import { getContentLimits } from "./utils/contentLimits.js";
 import { createPluginHost } from "./plugins/host.js";
 import pluginRegistry from "./plugins/registry.js";
+import { createTrackerFilter } from "./tracker/policy.js";
+import {
+  attachWsUpgrade,
+  getUdpAnnounceUrl,
+  getWsAnnounceUrl,
+  isPersistEnabled,
+  isUdpEnabled,
+  isWsEnabled,
+  startPersistenceLoop,
+  startUdpListener,
+} from "./tracker/servers.js";
+import TrackerSwarm from "./schema/trackerSwarm.js";
 import Torrent from "./schema/torrent.js";
 import TorrentSubmission from "./schema/torrentSubmission.js";
 import Conversation from "./schema/conversation.js";
@@ -167,6 +179,7 @@ validateConfig(config)
             Invite.init(),
             AuditLog.init(),
             CheatLog.init(),
+            TrackerSwarm.init(),
           ]);
           await loadRuntimeSettings();
           await createAdminUser(mail);
@@ -295,8 +308,17 @@ validateConfig(config)
 
     const tracker = new Tracker.Server({
       http: false,
-      udp: false,
-      ws: false,
+      udp: isUdpEnabled() ? {} : false,
+      ws: isWsEnabled() ? { noServer: true } : false,
+      filter: createTrackerFilter(),
+      stats: false,
+      trustProxy: true,
+    });
+    tracker.on("error", (err) => {
+      console.error(`[sq] tracker error: ${err.message}`);
+    });
+    tracker.on("warning", (err) => {
+      console.warn(`[sq] tracker warning: ${err.message}`);
     });
     const pluginHost = createPluginHost({ registry: pluginRegistry, tracker });
     await pluginHost.register();
@@ -309,6 +331,17 @@ validateConfig(config)
     // legacy tracker path, kept so already-downloaded torrents keep announcing
     app.get("/sq/*/announce", createTrackerRoute("announce", onTrackerRequest));
     app.get("/sq/*/scrape", createTrackerRoute("scrape", onTrackerRequest));
+    app.get("/ws", (req, res) => {
+      if (!isWsEnabled()) {
+        res.status(404).send("WebSocket tracker is disabled");
+        return;
+      }
+      res.json({
+        endpoint: "/ws",
+        url: getWsAnnounceUrl(),
+        open: process.env.SQ_TRACKER_OPEN === "true",
+      });
+    });
 
     // Small default body limit; large uploads mount a higher limit only on
     // their own routes so login/comments/votes cannot be used for memory DoS.
@@ -381,6 +414,12 @@ validateConfig(config)
         forumEnabled: process.env.SQ_ENABLE_FORUM !== "false",
         announcementsEnabled: process.env.SQ_ENABLE_ANNOUNCEMENTS !== "false",
         rssEnabled: process.env.SQ_ENABLE_RSS !== "false",
+        trackerOpen: process.env.SQ_TRACKER_OPEN === "true",
+        trackerUdpEnabled: isUdpEnabled(),
+        trackerUdpUrl: getUdpAnnounceUrl(),
+        trackerWsEnabled: isWsEnabled(),
+        trackerWsUrl: getWsAnnounceUrl(),
+        trackerPersistEnabled: isPersistEnabled(),
       });
     });
     app.get("/user/:username/avatar", serveAvatar);
@@ -483,12 +522,22 @@ validateConfig(config)
       listener.once("error", reject);
     });
     console.log(`[sq] ■ sqtracker running http://localhost:${port}`);
+    const detachWs = attachWsUpgrade({ tracker, httpServer: server });
+    await startUdpListener({ tracker });
+    const stopPersistence = startPersistenceLoop({ tracker });
 
     let stopping = false;
     const stop = async () => {
       if (stopping) return;
       stopping = true;
       try {
+        detachWs?.();
+        await stopPersistence?.();
+        try {
+          tracker.close();
+        } catch {
+          // tracker close is best-effort
+        }
         await new Promise((resolve, reject) => {
           server.close((error) => (error ? reject(error) : resolve()));
         });

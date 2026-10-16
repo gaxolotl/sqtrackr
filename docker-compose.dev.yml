@@ -41,6 +41,9 @@ services:
     restart: always
     ports:
       - "127.0.0.1:3001:3001"
+      # Native UDP tracker (BEP 15). Only needed when
+      # SQ_TRACKER_UDP_ENABLED=true.
+      - "6969:6969/udp"
     # Optional Sentry reporting (passthrough; unset by default, see
     # docker-compose.yml). Never baked into the image.
     environment:

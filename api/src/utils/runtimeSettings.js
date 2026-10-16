@@ -76,6 +76,8 @@ export const runtimeSettingsSchema = yup
     SQ_BP_COST_PER_INVITE: yup.number().min(0).max(100000).required(),
     SQ_BP_COST_PER_GB: yup.number().min(0).max(100000).required(),
     SQ_SITE_WIDE_FREELEECH: yup.boolean().required(),
+    SQ_TRACKER_OPEN: yup.boolean().required(),
+    SQ_TRACKER_ANON_REQUIRE_FREELEECH: yup.boolean().required(),
     SQ_ALLOW_UNREGISTERED_VIEW: yup.boolean().required(),
     SQ_EXTENSION_BLACKLIST: yup
       .array()
@@ -132,6 +134,8 @@ const booleanKeys = new Set([
   "SQ_ALLOW_ANONYMOUS_UPLOADS",
   "SQ_TORRENT_PREMODERATION",
   "SQ_SITE_WIDE_FREELEECH",
+  "SQ_TRACKER_OPEN",
+  "SQ_TRACKER_ANON_REQUIRE_FREELEECH",
   "SQ_ALLOW_UNREGISTERED_VIEW",
   "SQ_ALLOW_GIF_AVATARS",
   "SQ_ENABLE_RSS_READERS",
@@ -175,6 +179,8 @@ const fallbackValues = {
   SQ_BP_COST_PER_INVITE: "3",
   SQ_BP_COST_PER_GB: "3",
   SQ_SITE_WIDE_FREELEECH: "false",
+  SQ_TRACKER_OPEN: "false",
+  SQ_TRACKER_ANON_REQUIRE_FREELEECH: "true",
   SQ_ALLOW_UNREGISTERED_VIEW: "false",
   SQ_TORRENT_CATEGORIES: "{}",
   SQ_EXTENSION_BLACKLIST: '["exe"]',

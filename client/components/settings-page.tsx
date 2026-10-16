@@ -51,6 +51,8 @@ type AdminSettings = {
   SQ_BP_COST_PER_INVITE: number;
   SQ_BP_COST_PER_GB: number;
   SQ_SITE_WIDE_FREELEECH: boolean;
+  SQ_TRACKER_OPEN: boolean;
+  SQ_TRACKER_ANON_REQUIRE_FREELEECH: boolean;
   SQ_ALLOW_UNREGISTERED_VIEW: boolean;
   SQ_EXTENSION_BLACKLIST: string[];
   SQ_CLIENT_BLACKLIST: string[];
@@ -255,6 +257,10 @@ export function SettingsPage() {
           "SQ_SHORTEN_MATCHED_TORRENT_NAMES",
         ),
         SQ_SITE_WIDE_FREELEECH: form.has("SQ_SITE_WIDE_FREELEECH"),
+        SQ_TRACKER_OPEN: form.has("SQ_TRACKER_OPEN"),
+        SQ_TRACKER_ANON_REQUIRE_FREELEECH: form.has(
+          "SQ_TRACKER_ANON_REQUIRE_FREELEECH",
+        ),
         SQ_ALLOW_UNREGISTERED_VIEW: form.has("SQ_ALLOW_UNREGISTERED_VIEW"),
         SQ_ALLOW_GIF_AVATARS: form.has("SQ_ALLOW_GIF_AVATARS"),
         SQ_ENABLE_RSS_READERS: form.has("SQ_ENABLE_RSS_READERS"),
@@ -553,6 +559,24 @@ export function SettingsPage() {
                     defaultChecked={settings.data.SQ_SITE_WIDE_FREELEECH}
                   />{" "}
                   Site-wide freeleech
+                </label>
+                <label>
+                  <input
+                    name="SQ_TRACKER_OPEN"
+                    type="checkbox"
+                    defaultChecked={settings.data.SQ_TRACKER_OPEN}
+                  />{" "}
+                  Open UDP/WebSocket tracker for known torrents
+                </label>
+                <label>
+                  <input
+                    name="SQ_TRACKER_ANON_REQUIRE_FREELEECH"
+                    type="checkbox"
+                    defaultChecked={
+                      settings.data.SQ_TRACKER_ANON_REQUIRE_FREELEECH
+                    }
+                  />{" "}
+                  Only allow anonymous UDP/WebSocket for freeleech torrents
                 </label>
                 <label>
                   <input

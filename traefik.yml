@@ -4,7 +4,7 @@ http:
       service: api
       entryPoints:
         - web
-      rule: "Host(`example.com`) && PathPrefix(`/api`, `/sq`, `/announce`, `/rss`, `/torrent`, `/config`, `/register`, `/login`, `/reset-password`, `/verify-email`, `/user`, `/account`, `/announcements`, `/reports`, `/admin`, `/requests`, `/group`, `/wiki`, `/forum`, `/messages`, `/moderation`, `/notifications`, `/plugins`)"
+      rule: "Host(`example.com`) && PathPrefix(`/api`, `/sq`, `/announce`, `/rss`, `/torrent`, `/config`, `/register`, `/login`, `/reset-password`, `/verify-email`, `/user`, `/account`, `/announcements`, `/reports`, `/admin`, `/requests`, `/group`, `/wiki`, `/forum`, `/messages`, `/moderation`, `/notifications`, `/plugins`, `/ws`)"
       middlewares:
         - api-prefix
         - apiHostHeaderSet

@@ -55,6 +55,10 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:3001:3001"
+      # Native UDP tracker (BEP 15). Only needed when
+      # SQ_TRACKER_UDP_ENABLED=true. UDP cannot go through Traefik HTTP
+      # routing, so it is published directly on the host.
+      - "6969:6969/udp"
     # Optional Sentry reporting. Leave SENTRY_DSN unset to run without it;
     # the value comes from the shell environment (or a .env file), never
     # from the image.
