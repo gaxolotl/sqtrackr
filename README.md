@@ -65,6 +65,12 @@ It implements all of the features required to run a private (or public) tracker 
   * Banned BitTorrent client prefixes denied on announce
   * Physically impossible upload speeds flagged for review
   * Rapid re-announces, downloads larger than the torrent, and completions with zero downloaded bytes flagged for review (throttled, log-only)
+* Tracker protocols
+  * HTTP announce/scrape with per-user keys (`/announce/:uid`), ratio and hit-and-run enforcement
+  * Native UDP tracker (BEP 15) sharing the same swarm (`SQ_TRACKER_UDP_ENABLED`, default port `6969`)
+  * WebTorrent WebSocket tracker at `/ws` (`SQ_TRACKER_WS_ENABLED`, authenticated via `/ws?uid=`)
+  * Anonymous UDP/WebSocket gated by runtime `SQ_TRACKER_OPEN` plus per-torrent freeleech (`SQ_TRACKER_ANON_REQUIRE_FREELEECH`); HTTP stays fully accounted
+  * Swarm persistence to MongoDB with restore on restart (`SQ_TRACKER_PERSIST_ENABLED`, interval `SQ_TRACKER_PERSIST_INTERVAL_SEC`)
 * Plugins
   * Trusted, build-time plugin API with routes, storage, settings, events, tabs and UI slots
   * Enable, configure and remove installed plugins from **Settings → Plugins**
@@ -164,7 +170,7 @@ An sqtrackr deployment is made up of 4 separate components. These are:
 
 #### 1. The sqtrackr API service
 
-The sqtrackr API service handles all actions taken by users (authentication, uploads, searching etc.), implements the BitTorrent tracker specification to handle announces and scrapes, and provides the RSS feed.
+The sqtrackr API service handles all actions taken by users (authentication, uploads, searching etc.), implements the BitTorrent tracker specification to handle announces and scrapes, and provides the RSS feed. It serves HTTP announces, an optional UDP tracker (publish `6969/udp` on the host; it cannot go through the HTTP proxy) and an optional WebSocket tracker at `/ws` (route it through Traefik/Nginx like `/announce`).
 
 #### 2. The sqtrackr client service
 
