@@ -38,12 +38,13 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useTrackerConfig } from "@/hooks/use-tracker-config";
 import { useUnreadMessages } from "@/hooks/use-unread-messages";
 import { useModerationQueue } from "@/hooks/use-moderation-queue";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { useApiData } from "@/hooks/use-api-data";
+import { useDismiss } from "@/hooks/use-dismiss";
 import { canModerate } from "@/lib/api";
 import { UserAvatar } from "@/components/user-avatar";
 
@@ -70,13 +71,13 @@ const pageTitleRoutes: Array<[string, MessageKey]> = [
   ["/notifications", "notifications"],
   ["/moderation", "moderation"],
   ["/register", "register"],
-  ["/reports", "moderation"],
+  ["/reports", "reports"],
   ["/requests", "requests"],
   ["/reset-password", "login"],
   ["/rss", "rss"],
   ["/search", "search"],
   ["/settings", "settings"],
-  ["/stats", "moderation"],
+  ["/stats", "stats"],
   ["/tags", "browse"],
   ["/torrent", "torrent"],
   ["/upload", "upload"],
@@ -96,7 +97,7 @@ function pageTitleKey(pathname: string): MessageKey {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { session } = useAuth();
+  const { session, hydrated } = useAuth();
   const plugins = usePluginHost();
   const { locale, setLocale, t } = useI18n();
   const { config } = useTrackerConfig();
@@ -109,6 +110,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
   const [menuOpen, setMenuOpen] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
+  const languageMenu = useRef<HTMLDivElement>(null);
+  const closeLanguage = useCallback(() => setLanguageOpen(false), []);
+
+  useDismiss(languageOpen, closeLanguage, languageMenu);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [menuOpen]);
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem("sq-theme");
@@ -133,7 +147,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const root = document.documentElement;
     const variables: Record<string, string | undefined> = {
       "--accent": primary,
-      "--accent-hover": primary,
+      "--accent-hover": primary
+        ? `color-mix(in srgb, ${primary} 85%, #fff)`
+        : undefined,
       "--accent-soft": primary
         ? `color-mix(in srgb, ${primary} 12%, transparent)`
         : undefined,
@@ -174,8 +190,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     href: string;
     icon: LucideIcon;
     badge?: number;
-  }> =
-    session
+  }> = !hydrated
+    ? []
+    : session
       ? [
           ...(canModerate(session.role)
             ? [
@@ -213,8 +230,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       <title>{browserTitle}</title>
+      <a className="skip-link" href="#main-content">
+        {t("skipToContent")}
+      </a>
       <div className="app-frame">
-        <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
+        <aside
+          className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}
+          id="app-sidebar"
+        >
           <div className="brand-row">
             <Link className="brand" href="/" onClick={() => setMenuOpen(false)}>
               <span className="brand-mark" aria-hidden="true">
@@ -240,6 +263,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   className={`nav-link ${isActive(href) ? "active" : ""}`}
                   href={href}
                   key={label}
+                  aria-current={isActive(href) ? "page" : undefined}
                   onClick={() => setMenuOpen(false)}
                 >
                   <span className="nav-label">
@@ -268,6 +292,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <Link
                     className={`nav-link ${isActive(item.href) ? "active" : ""}`}
                     href={item.href}
+                    aria-current={isActive(item.href) ? "page" : undefined}
                     onClick={() => setMenuOpen(false)}
                   >
                     <span>{item.label}</span>
@@ -281,6 +306,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 className={`nav-link ${isActive(href) ? "active" : ""}`}
                 href={href}
                 key={label}
+                aria-current={isActive(href) ? "page" : undefined}
                 onClick={() => setMenuOpen(false)}
               >
                 <span className="nav-label">
@@ -302,6 +328,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Link
                   className={`nav-link ${isActive(`/user/${session.username}`) ? "active" : ""}`}
                   href={`/user/${encodeURIComponent(session.username)}`}
+                  aria-current={
+                    isActive(`/user/${session.username}`) ? "page" : undefined
+                  }
                   onClick={() => setMenuOpen(false)}
                 >
                   <span>{t("profile")}</span>
@@ -355,6 +384,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               type="button"
               onClick={() => setMenuOpen(true)}
               aria-label={t("openNavigation")}
+              aria-expanded={menuOpen}
+              aria-controls="app-sidebar"
             >
               <Menu />
             </button>
@@ -373,13 +404,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span className="topbar-spacer" />
             )}
             {session ? <NotificationsBell /> : null}
-            <div className="language-menu">
+            <div className="language-menu" ref={languageMenu}>
               <button
                 className="language-trigger"
                 type="button"
                 title={t("language")}
                 aria-label={t("language")}
                 aria-expanded={languageOpen}
+                aria-controls="language-options"
                 onClick={() => setLanguageOpen((open) => !open)}
               >
                 <Languages aria-hidden="true" />
@@ -387,7 +419,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <ChevronDown aria-hidden="true" />
               </button>
               {languageOpen ? (
-                <div className="language-options" role="menu">
+                <div className="language-options" id="language-options">
                   {supportedLocales.map((option) => (
                     <button
                       className={
@@ -397,7 +429,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       }
                       key={option}
                       type="button"
-                      role="menuitem"
                       onClick={() => {
                         setLocale(option);
                         setLanguageOpen(false);
@@ -420,7 +451,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Sun className="sun-icon" aria-hidden="true" />
             </button>
           </header>
-          {children}
+          <div id="main-content" tabIndex={-1}>
+            {children}
+          </div>
         </div>
       </div>
     </>

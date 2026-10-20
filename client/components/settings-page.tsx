@@ -146,19 +146,42 @@ export function SettingsPage() {
   );
 
   // Sync the editors when fresh settings arrive (initial load or after save).
+  // Normalise collection settings here: an API instance with a missing or
+  // partial runtime-settings document must never crash the whole page.
   if (settings.data && editorSource !== settings.data) {
-    setEditorSource(settings.data);
+    const data = settings.data;
+    setEditorSource(data);
+    const categoryRecord =
+      data.SQ_TORRENT_CATEGORIES &&
+      typeof data.SQ_TORRENT_CATEGORIES === "object"
+        ? data.SQ_TORRENT_CATEGORIES
+        : {};
     setCategories(
-      Object.entries(settings.data.SQ_TORRENT_CATEGORIES).map(
-        ([name, sources]) => ({ name, sources: [...sources] }),
-      ),
+      Object.entries(categoryRecord).map(([name, sources]) => ({
+        name,
+        sources: Array.isArray(sources) ? [...sources] : [],
+      })),
     );
-    setBlockedExtensions([...settings.data.SQ_EXTENSION_BLACKLIST]);
-    setBlockedClients([...(settings.data.SQ_CLIENT_BLACKLIST ?? [])]);
-    setActionOrder([
-      ...(settings.data.SQ_TORRENT_ACTION_ORDER ?? []),
-    ]);
-    setThemeColors({ ...settings.data.SQ_CUSTOM_THEME });
+    setBlockedExtensions(
+      Array.isArray(data.SQ_EXTENSION_BLACKLIST)
+        ? [...data.SQ_EXTENSION_BLACKLIST]
+        : [],
+    );
+    setBlockedClients(
+      Array.isArray(data.SQ_CLIENT_BLACKLIST)
+        ? [...data.SQ_CLIENT_BLACKLIST]
+        : [],
+    );
+    setActionOrder(
+      Array.isArray(data.SQ_TORRENT_ACTION_ORDER)
+        ? [...data.SQ_TORRENT_ACTION_ORDER]
+        : [],
+    );
+    setThemeColors(
+      data.SQ_CUSTOM_THEME && typeof data.SQ_CUSTOM_THEME === "object"
+        ? { ...data.SQ_CUSTOM_THEME }
+        : {},
+    );
   }
   const editorsReady = editorSource !== null && themeColors !== null;
 

@@ -63,5 +63,6 @@
   "newHere": "New here?",
   "alreadyAccount": "Already have an account?",
   "forgotPassword": "Forgot your password?",
-  "sessionExpired": "Ihre Sitzung ist abgelaufen. Melden Sie sich erneut an, um fortzufahren."
+  "sessionExpired": "Ihre Sitzung ist abgelaufen. Melden Sie sich erneut an, um fortzufahren.",
+  "skipToContent": "Zum Inhalt springen"
 }

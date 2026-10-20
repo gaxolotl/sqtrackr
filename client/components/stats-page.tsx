@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/components/auth-context";
+import { useI18n } from "@/components/i18n-context";
 import { ActionMessage, ApiState, PageHeader, SignInRequired } from "@/components/ui";
 import { useApiData } from "@/hooks/use-api-data";
 import { apiFetch } from "@/lib/api";
@@ -20,6 +21,7 @@ import type { TrackerStats } from "@/lib/types";
 
 export function StatsPage({ embedded }: { embedded?: boolean }) {
   const { session } = useAuth();
+  const { t } = useI18n();
   const { data, error, loading, reload } = useApiData<TrackerStats>(
     session?.role === "admin" ? "/admin/stats" : null
   );
@@ -63,7 +65,7 @@ export function StatsPage({ embedded }: { embedded?: boolean }) {
     <>
       {embedded ? null : (
         <PageHeader
-          title="Stats"
+          title={t("stats")}
           actions={
             isAdmin ? (
               <button

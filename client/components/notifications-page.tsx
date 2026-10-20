@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useAuth } from "@/components/auth-context";
+import { useI18n } from "@/components/i18n-context";
 import { Pager } from "@/components/pager";
 import {
   ActionMessage,
@@ -29,6 +30,7 @@ function safeNotificationLink(link: unknown) {
 
 export function NotificationsPage() {
   const { session } = useAuth();
+  const { t } = useI18n();
   const [page, setPage] = useState(0);
   const notifications = useApiData<NotificationPage>(
     session ? `/notifications/page/${page}` : null,
@@ -80,7 +82,7 @@ export function NotificationsPage() {
   return (
     <main className="page list-page">
       <PageHeader
-        title="Notifications"
+        title={t("notifications")}
         actions={
           <button
             className="secondary-button"

@@ -3,6 +3,7 @@
 import { Copy, ExternalLink, RefreshCw, Rss, ShieldAlert } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { useAuth } from "@/components/auth-context";
+import { useI18n } from "@/components/i18n-context";
 import {
   ActionMessage,
   ApiState,
@@ -25,6 +26,7 @@ const feedReaders = [
 
 export function RssPage() {
   const { session } = useAuth();
+  const { t } = useI18n();
   const { config } = useTrackerConfig();
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
@@ -109,7 +111,7 @@ export function RssPage() {
 
   return (
     <main className="page form-page">
-      <PageHeader title="RSS" />
+      <PageHeader title={t("rss")} />
       <section className="rss-card">
         <Rss aria-hidden="true" />
         <div>

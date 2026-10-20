@@ -2,6 +2,7 @@
 
 import { KeyboardEvent, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-context";
+import { useI18n } from "@/components/i18n-context";
 import { AuditLogPage } from "@/components/audit-log-page";
 import { CheatLogTab } from "@/components/cheat-log-tab";
 import { MembersTab } from "@/components/members-tab";
@@ -20,6 +21,7 @@ export function ModerationPage({
   initialTab?: ModerationTab;
 }) {
   const { session } = useAuth();
+  const { t } = useI18n();
   const pluginHost = usePluginHost();
   const isAdmin = session?.role === "admin";
   const allowed = canModerate(session?.role);
@@ -88,7 +90,7 @@ export function ModerationPage({
   return (
     <main className="page list-page">
       <PageHeader
-        title="Moderation"
+        title={t("moderation")}
         info="Review uploads and reports, manage members, and inspect tracker stats."
       />
       {!allowed ? (

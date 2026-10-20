@@ -5,6 +5,7 @@ import { MessageSquare, Search, Settings } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-context";
+import { useI18n } from "@/components/i18n-context";
 import { ApiState, PageHeader, SignInRequired } from "@/components/ui";
 import { FeatureDisabled } from "@/components/feature-disabled";
 import { useApiData } from "@/hooks/use-api-data";
@@ -15,6 +16,7 @@ import type { ForumCategory } from "@/lib/types";
 
 export function ForumCategories() {
   const { session } = useAuth();
+  const { t } = useI18n();
   const { config } = useTrackerConfig();
   const router = useRouter();
   const { data, error, loading } = useApiData<ForumCategory[]>(
@@ -42,7 +44,7 @@ export function ForumCategories() {
   return (
     <main className="page forum-page forum-categories-page">
       <PageHeader
-        title="Forum"
+        title={t("forum")}
         actions={
           session.role === "admin" ? (
             <Link className="secondary-button button-link" href="/forum/admin">

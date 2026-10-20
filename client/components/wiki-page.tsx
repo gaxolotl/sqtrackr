@@ -46,7 +46,7 @@ export function WikiPage({ slug = "/" }: { slug?: string }) {
   if (data && !data.page) {
     return (
       <main className="page wiki-page">
-        <div className="state-panel">
+        <div className="state-panel state-panel-centered">
           {session.role === "admin"
             ? "The wiki main page does not exist yet. Taking you to the editor…"
             : "The wiki main page has not been created yet."}

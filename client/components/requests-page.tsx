@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { KeyboardEvent, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-context";
+import { useI18n } from "@/components/i18n-context";
 import { Pager } from "@/components/pager";
 import { ApiState, PageHeader, SignInRequired } from "@/components/ui";
 import { useApiData } from "@/hooks/use-api-data";
@@ -26,6 +27,7 @@ function SubmissionStatusIcon({ status }: { status: string }) {
 
 export function RequestsPage() {
   const { session } = useAuth();
+  const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("requests");
   const [submissionPage, setSubmissionPage] = useState(0);
   const requestsTab = useRef<HTMLButtonElement>(null);
@@ -61,7 +63,7 @@ export function RequestsPage() {
   return (
     <main className="page list-page">
       <PageHeader
-        title="Requests"
+        title={t("requests")}
         actions={
           tab === "requests" ? (
             <Link className="primary-button button-link" href="/requests/new">

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-context";
+import { useI18n } from "@/components/i18n-context";
 import { ActionMessage, ApiState, PageHeader, SignInRequired } from "@/components/ui";
 import { useApiData } from "@/hooks/use-api-data";
 import { apiFetch } from "@/lib/api";
@@ -18,6 +19,7 @@ import type { Report } from "@/lib/types";
 
 export function ReportsPage({ embedded }: { embedded?: boolean }) {
   const { session } = useAuth();
+  const { t } = useI18n();
   const [tab, setTab] = useState<"open" | "solved">("open");
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -75,7 +77,7 @@ export function ReportsPage({ embedded }: { embedded?: boolean }) {
 
   const content = (
     <>
-      {embedded ? null : <PageHeader title="Reports" />}
+      {embedded ? null : <PageHeader title={t("reports")} />}
       <div className="tab-bar" role="tablist" aria-label="Reports">
         <button
           type="button"

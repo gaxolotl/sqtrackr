@@ -14,6 +14,7 @@ import {
 import { FormEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-context";
+import { useI18n } from "@/components/i18n-context";
 import {
   ActionMessage,
   Field,
@@ -89,6 +90,7 @@ function parsedSummary(result: TmdbIdentification) {
 
 export function UploadPage() {
   const { session } = useAuth();
+  const { t } = useI18n();
   const router = useRouter();
   const { config } = useTrackerConfig();
   const [file, setFile] = useState<File | null>(null);
@@ -307,7 +309,7 @@ export function UploadPage() {
   }
   return (
     <main className="page form-page">
-      <PageHeader title="Upload" />
+      <PageHeader title={t("upload")} />
       {requiresReview ? (
         <div className="upload-review-notice">
           <Info aria-hidden="true" />

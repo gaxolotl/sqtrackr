@@ -63,5 +63,6 @@
   "newHere": "New here?",
   "alreadyAccount": "Already have an account?",
   "forgotPassword": "Forgot your password?",
-  "sessionExpired": "您的会话已过期。请重新登录以继续。"
+  "sessionExpired": "您的会话已过期。请重新登录以继续。",
+  "skipToContent": "跳到内容"
 }

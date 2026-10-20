@@ -448,12 +448,14 @@ export function TorrentDetail({ infoHash }: { infoHash: string }) {
                   <dd>
                     {data.anonymous ? (
                       "Anonymous"
-                    ) : (
+                    ) : data.uploadedBy?.username ? (
                       <Link
-                        href={`/user/${encodeURIComponent(data.uploadedBy?.username ?? "unknown")}`}
+                        href={`/user/${encodeURIComponent(data.uploadedBy.username)}`}
                       >
-                        {data.uploadedBy?.username ?? "Unknown"}
+                        {data.uploadedBy.username}
                       </Link>
+                    ) : (
+                      <span className="subtle">Unknown</span>
                     )}
                   </dd>
                 </div>

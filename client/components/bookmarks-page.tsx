@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useAuth } from "@/components/auth-context";
+import { useI18n } from "@/components/i18n-context";
 import { TorrentTable } from "@/components/torrent-table";
 import { PluginTab, usePluginHost } from "@/components/plugin-host";
 import { ApiState, PageHeader, SignInRequired } from "@/components/ui";
@@ -11,6 +12,7 @@ import type { Torrent } from "@/lib/types";
 
 function BookmarksContent() {
   const { session } = useAuth();
+  const { t } = useI18n();
   const searchParams = useSearchParams();
   const pluginHost = usePluginHost();
   const { data, error, loading } = useApiData<{ torrents?: Torrent[] } | Torrent[]>(session ? "/account/bookmarks" : null);
@@ -29,12 +31,12 @@ function BookmarksContent() {
   if (!session) return <main className="page"><SignInRequired /></main>;
 
   if (!pluginTabs.length) {
-    return <main className="page"><PageHeader title="Bookmarks" /><ApiState loading={loading} error={error} empty={!torrents.length}><TorrentTable torrents={torrents} /></ApiState></main>;
+    return <main className="page"><PageHeader title={t("bookmarks")} /><ApiState loading={loading} error={error} empty={!torrents.length}><TorrentTable torrents={torrents} /></ApiState></main>;
   }
 
   return (
     <main className="page">
-      <PageHeader title="Bookmarks" />
+      <PageHeader title={t("bookmarks")} />
       <div className="tab-bar" role="tablist" aria-label="Bookmarks">
         <button
           type="button"

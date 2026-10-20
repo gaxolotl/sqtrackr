@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { Search, X } from "lucide-react";
 import { useAuth } from "@/components/auth-context";
+import { useI18n } from "@/components/i18n-context";
 import { TorrentTable } from "@/components/torrent-table";
 import { ActionMessage, ApiState, PageHeader, SignInRequired } from "@/components/ui";
 import { useApiData } from "@/hooks/use-api-data";
@@ -28,10 +29,12 @@ function suggestionPoster(path?: string) {
 export function SearchPage({ initialQuery }: { initialQuery: string }) {
   const router = useRouter();
   const { session } = useAuth();
+  const { t } = useI18n();
   const { config } = useTrackerConfig();
   const [query, setQuery] = useState(initialQuery);
   const [suggestions, setSuggestions] = useState<Torrent[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [suggestionsLoaded, setSuggestionsLoaded] = useState(false);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const path =
     session && initialQuery
@@ -63,7 +66,10 @@ export function SearchPage({ initialQuery }: { initialQuery: string }) {
       } catch {
         if (!controller.signal.aborted) setSuggestions([]);
       } finally {
-        if (!controller.signal.aborted) setSuggestionsLoading(false);
+        if (!controller.signal.aborted) {
+          setSuggestionsLoading(false);
+          setSuggestionsLoaded(true);
+        }
       }
     }, 180);
 
@@ -129,15 +135,14 @@ export function SearchPage({ initialQuery }: { initialQuery: string }) {
   const showSuggestions =
     suggestionsOpen &&
     query.trim().length >= 2 &&
-    (suggestionsLoading || suggestions.length > 0);
+    (suggestionsLoading || suggestionsLoaded);
 
   return (
     <main className="page">
-      <PageHeader title="Search" />
+      <PageHeader title={t("search")} />
       <form className="hero-search search-page-form" onSubmit={submit}>
         <div
           className="hero-search-field search-suggest-field"
-          onFocus={() => setSuggestionsOpen(true)}
           onBlur={(event) => {
             if (!event.currentTarget.contains(event.relatedTarget)) {
               setSuggestionsOpen(false);
@@ -150,9 +155,11 @@ export function SearchPage({ initialQuery }: { initialQuery: string }) {
             value={query}
             maxLength={200}
             onChange={(event) => {
-              setQuery(event.target.value);
+              const nextQuery = event.target.value;
+              setQuery(nextQuery);
               setSuggestions([]);
-              setSuggestionsLoading(false);
+              setSuggestionsLoading(nextQuery.trim().length >= 2);
+              setSuggestionsLoaded(false);
               setSuggestionsOpen(true);
             }}
             onKeyDown={(event) => {
@@ -163,6 +170,7 @@ export function SearchPage({ initialQuery }: { initialQuery: string }) {
             aria-autocomplete="list"
             aria-controls="torrent-search-suggestions"
             aria-expanded={showSuggestions}
+            aria-busy={suggestionsLoading || undefined}
             role="combobox"
             autoComplete="off"
             autoFocus
@@ -215,12 +223,20 @@ export function SearchPage({ initialQuery }: { initialQuery: string }) {
                     </li>
                   ))}
                 </ul>
+              ) : suggestionsLoaded ? (
+                <p className="search-suggestions-empty">
+                  No torrents match “{query.trim()}”.
+                </p>
               ) : null}
             </div>
           ) : null}
         </div>
-        <button className="primary-button" type="submit">
-          Search
+        <button
+          className="primary-button"
+          type="submit"
+          disabled={!query.trim()}
+        >
+          {t("search")}
         </button>
       </form>
       {initialQuery ? (
@@ -261,7 +277,10 @@ export function SearchPage({ initialQuery }: { initialQuery: string }) {
           <div className="feed-list">
             {saved.data?.map((item) => (
               <div className="feed-card" key={item._id}>
-                <Link href={`/search?q=${encodeURIComponent(item.query)}`}>
+                <Link
+                  className="feed-card-link"
+                  href={`/search?q=${encodeURIComponent(item.query)}`}
+                >
                   <div>
                     <h2>{item.name}</h2>
                     <p>{item.query}</p>

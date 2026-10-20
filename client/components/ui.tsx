@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { AlertCircle, CircleHelp, LoaderCircle, LogIn } from "lucide-react";
 import { useEffect } from "react";
+import { useAuth } from "@/components/auth-context";
 import { useToast } from "@/components/toast-context";
 import { useI18n } from "@/components/i18n-context";
 
@@ -12,17 +13,18 @@ export function PageHeader({
   info,
   actions,
 }: {
-  title: string;
+  title?: string | null;
   titleTooltip?: string;
   info?: string;
   actions?: React.ReactNode;
 }) {
+  const safeTitle = typeof title === "string" ? title : "";
   return (
     <header className="page-header">
       <div
-        className={`page-title-row${title.length > 56 ? " long-title" : ""}`}
+        className={`page-title-row${safeTitle.length > 56 ? " long-title" : ""}`}
       >
-        <h1 title={titleTooltip ?? title}>{title}</h1>
+        <h1 title={titleTooltip ?? safeTitle}>{safeTitle}</h1>
         {info ? (
           <span className="info-tooltip" tabIndex={0} aria-label={info}>
             <CircleHelp aria-hidden="true" />
@@ -49,23 +51,37 @@ export function ApiState({
   const { t } = useI18n();
   if (loading)
     return (
-      <div className="state-panel">
+      <div className="state-panel state-panel-centered" role="status">
         <LoaderCircle className="spin" aria-hidden="true" /> {t("loading")}
       </div>
     );
   if (error)
     return (
-      <div className="state-panel state-error">
+      <div className="state-panel state-error" role="alert">
         <AlertCircle aria-hidden="true" />
         <span>{error}</span>
       </div>
     );
-  if (empty) return <div className="state-panel">{t("nothingHere")}</div>;
+  if (empty)
+    return (
+      <div className="state-panel state-panel-centered" role="status">
+        {t("nothingHere")}
+      </div>
+    );
   return <>{children}</>;
 }
 
 export function SignInRequired() {
+  const { hydrated } = useAuth();
   const { t } = useI18n();
+  if (!hydrated) {
+    return (
+      <div className="state-panel sign-in-panel" role="status">
+        <LoaderCircle className="spin" aria-hidden="true" />
+        <span>{t("loading")}</span>
+      </div>
+    );
+  }
   return (
     <div className="state-panel sign-in-panel">
       <LogIn aria-hidden="true" />

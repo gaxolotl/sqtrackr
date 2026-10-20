@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { Bell } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useI18n } from "@/components/i18n-context";
 import { useApiData } from "@/hooks/use-api-data";
+import { useDismiss } from "@/hooks/use-dismiss";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
@@ -25,10 +26,14 @@ function safeNotificationLink(link: unknown) {
 export function NotificationsBell() {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  const menu = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(false), []);
   const unread = useUnreadNotifications(true);
   const recent = useApiData<NotificationPage>(
     open ? "/notifications/page/0" : null,
   );
+
+  useDismiss(open, close, menu);
 
   async function markAllRead() {
     try {
@@ -54,13 +59,18 @@ export function NotificationsBell() {
   const items = (recent.data?.items ?? []).slice(0, 8);
 
   return (
-    <div className="notifications-menu">
+    <div className="notifications-menu" ref={menu}>
       <button
         className="theme-button notifications-trigger"
         type="button"
         title={t("notifications")}
-        aria-label={t("notifications")}
+        aria-label={
+          unread > 0
+            ? `${t("notifications")}: ${unread} unread`
+            : t("notifications")
+        }
         aria-expanded={open}
+        aria-controls="notifications-menu"
         onClick={toggle}
       >
         <Bell aria-hidden="true" />
@@ -71,7 +81,12 @@ export function NotificationsBell() {
         ) : null}
       </button>
       {open ? (
-        <div className="notifications-popup" role="menu">
+        <div
+          className="notifications-popup"
+          id="notifications-menu"
+          role="region"
+          aria-label={t("notifications")}
+        >
           {recent.loading ? (
             <p className="notifications-empty">Loading…</p>
           ) : items.length ? (

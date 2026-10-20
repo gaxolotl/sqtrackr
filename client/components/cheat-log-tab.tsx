@@ -30,7 +30,7 @@ export function CheatLogTab({ embedded }: { embedded?: boolean }) {
   const { data, error, loading } = useApiData<CheatEntry[]>(
     allowed ? `/admin/cheat-log/page/${page}${query}` : null,
   );
-  const entries = data ?? [];
+  const entries = Array.isArray(data) ? data : [];
   const hasMore = entries.length >= pageSize;
 
   if (!session) {
@@ -44,7 +44,7 @@ export function CheatLogTab({ embedded }: { embedded?: boolean }) {
   const content = (
     <>
       {embedded ? null : <PageHeader title="Cheat log" />}
-      <div className="moderation-filters">
+      <div className="moderation-filters moderation-filters-single">
         <label>
           <span>Reason</span>
           <select
@@ -56,10 +56,14 @@ export function CheatLogTab({ embedded }: { embedded?: boolean }) {
             aria-label="Filter by cheat reason"
           >
             <option value="">All reasons</option>
-            <option value="impossible-upload-speed">Impossible upload speed</option>
+            <option value="impossible-upload-speed">
+              Impossible upload speed
+            </option>
             <option value="announce-too-frequent">Announce too frequent</option>
             <option value="download-exceeds-size">Download exceeds size</option>
-            <option value="completed-without-download">Completed without download</option>
+            <option value="completed-without-download">
+              Completed without download
+            </option>
           </select>
         </label>
       </div>
@@ -78,7 +82,9 @@ export function CheatLogTab({ embedded }: { embedded?: boolean }) {
                   {entry.username ? (
                     <>
                       {" by "}
-                      <Link href={`/user/${encodeURIComponent(entry.username)}`}>
+                      <Link
+                        href={`/user/${encodeURIComponent(entry.username)}`}
+                      >
                         {entry.username}
                       </Link>
                     </>
@@ -98,7 +104,7 @@ export function CheatLogTab({ embedded }: { embedded?: boolean }) {
           ))}
         </div>
       </ApiState>
-      <div className="candidate-actions">
+      <nav className="pager" aria-label="Cheat log pagination">
         <button
           className="secondary-button compact-button"
           type="button"
@@ -116,7 +122,7 @@ export function CheatLogTab({ embedded }: { embedded?: boolean }) {
         >
           Next
         </button>
-      </div>
+      </nav>
     </>
   );
 

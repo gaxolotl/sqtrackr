@@ -388,7 +388,7 @@ export function UserProfile({ username }: { username: string }) {
                     ))}
                   </div>
                 ) : (
-                  <div className="state-panel">No warnings.</div>
+                  <div className="state-panel state-panel-centered">No warnings.</div>
                 )}
                 <form className="inline-form" onSubmit={issueWarning}>
                   <Field label="Issue a warning">
@@ -458,7 +458,7 @@ export function UserProfile({ username }: { username: string }) {
                     );
                   })
                 ) : (
-                  <div className="state-panel">No comments yet.</div>
+                  <div className="state-panel state-panel-centered">No comments yet.</div>
                 )}
               </div>
             </section>

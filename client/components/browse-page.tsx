@@ -38,7 +38,7 @@ export function BrowsePage() {
 
   return (
     <main className="page">
-      <PageHeader title="Categories" />
+      <PageHeader title={t("browse")} />
       <section className="category-grid">
         {allCards.map(({ name, slug, icon: Icon }) => (
           <Link className="category-card" href={`/categories/${slug}`} key={slug}>

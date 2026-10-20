@@ -63,5 +63,6 @@
   "newHere": "New here?",
   "alreadyAccount": "Already have an account?",
   "forgotPassword": "Forgot your password?",
-  "sessionExpired": "Tu sesión ha caducado. Inicia sesión de nuevo para continuar."
+  "sessionExpired": "Tu sesión ha caducado. Inicia sesión de nuevo para continuar.",
+  "skipToContent": "Saltar al contenido"
 }

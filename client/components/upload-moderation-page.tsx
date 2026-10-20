@@ -5,6 +5,7 @@ import { CheckCircle2, Clock3, Search, XCircle } from "lucide-react";
 import { KeyboardEvent, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-context";
 import { Pager } from "@/components/pager";
+import { useI18n } from "@/components/i18n-context";
 import { ActionMessage, ApiState, PageHeader, SignInRequired } from "@/components/ui";
 import { useApiData } from "@/hooks/use-api-data";
 import { apiFetch } from "@/lib/api";
@@ -22,6 +23,7 @@ function StatusIcon({ status }: { status: string }) {
 
 export function UploadModerationPage({ embedded }: { embedded?: boolean }) {
   const { session } = useAuth();
+  const { t } = useI18n();
   const allowed = canModerate(session?.role);
   const [view, setView] = useState<View>("pending");
   const [page, setPage] = useState(0);
@@ -112,7 +114,7 @@ export function UploadModerationPage({ embedded }: { embedded?: boolean }) {
 
   const content = (
     <>
-      {embedded ? null : <PageHeader title="Upload moderation" />}
+      {embedded ? null : <PageHeader title={t("uploadModeration")} />}
       <div className="tab-bar" role="tablist" aria-label="Upload submissions">
         <button
           ref={pendingTab}

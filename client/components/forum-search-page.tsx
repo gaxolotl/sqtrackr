@@ -72,7 +72,7 @@ export function ForumSearchPage({ initialQuery }: { initialQuery: string }) {
       </form>
 
       {!queryValue ? (
-        <div className="state-panel forum-search-prompt">
+        <div className="state-panel state-panel-centered forum-search-prompt">
           Enter a word or phrase to search forum discussions.
         </div>
       ) : (
@@ -139,7 +139,7 @@ export function ForumSearchPage({ initialQuery }: { initialQuery: string }) {
                 })}
               </div>
             ) : (
-              <div className="state-panel forum-search-empty">
+              <div className="state-panel state-panel-centered forum-search-empty">
                 No discussions matched this search. Try a broader word or
                 phrase.
               </div>

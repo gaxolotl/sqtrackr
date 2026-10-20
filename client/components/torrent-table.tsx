@@ -27,15 +27,15 @@ export function TorrentTable({ torrents = [] }: TorrentTableProps) {
   const { config } = useTrackerConfig();
   return (
     <div className="table-wrap">
-      <table className="torrent-table">
+      <table className="torrent-table" aria-label={t("torrent")}>
         <thead>
           <tr>
-            <th>{t("name")}</th>
-            <th>{t("category")}</th>
-            <th>{t("seeders")}</th>
-            <th>{t("leechers")}</th>
-            <th>{t("comments")}</th>
-            <th>{t("uploaded")}</th>
+            <th scope="col">{t("name")}</th>
+            <th scope="col">{t("category")}</th>
+            <th scope="col">{t("seeders")}</th>
+            <th scope="col">{t("leechers")}</th>
+            <th scope="col">{t("comments")}</th>
+            <th scope="col">{t("uploaded")}</th>
           </tr>
         </thead>
         <tbody>

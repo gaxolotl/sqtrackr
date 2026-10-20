@@ -63,5 +63,6 @@
   "newHere": "New here?",
   "alreadyAccount": "Already have an account?",
   "forgotPassword": "Forgot your password?",
-  "sessionExpired": "Your session expired. Sign in again to continue."
+  "sessionExpired": "Your session expired. Sign in again to continue.",
+  "skipToContent": "Skip to content"
 }

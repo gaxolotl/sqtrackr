@@ -19,6 +19,7 @@ type RegisterFields = {
 
 type AuthContextValue = {
   session: AuthSession | null;
+  hydrated: boolean;
   login: (fields: LoginFields) => Promise<AuthSession>;
   register: (fields: RegisterFields) => Promise<AuthSession>;
   logout: (opts?: { revoke?: boolean }) => Promise<void>;
@@ -48,6 +49,13 @@ function saveSession(session: AuthSession | null) {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const rawSession = useSyncExternalStore(subscribe, getSnapshot, () => null);
+  // false while server-rendered HTML is hydrating, true on the client. Pages
+  // use this to avoid briefly claiming the visitor is signed out.
+  const hydrated = useSyncExternalStore(
+    subscribe,
+    () => true,
+    () => false,
+  );
   const session = useMemo(() => {
     if (!rawSession) return null;
     try {
@@ -101,6 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
+      hydrated,
       async login(fields) {
         const response = await apiFetch<AuthResponse>("/login", {
           method: "POST",
@@ -142,7 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         saveSession(null);
       },
     }),
-    [session],
+    [session, hydrated],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

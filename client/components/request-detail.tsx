@@ -125,7 +125,7 @@ export function RequestDetail({ index }: { index: string }) {
         {data ? (
           <>
             <PageHeader
-              title={data.title}
+              title={data.title || (data.index ? `Request #${data.index}` : "Request")}
               info={`Posted ${formatDateTime(data.created)} by ${data.createdBy?.username ?? "Unknown"}`}
               actions={ownsRequest ? (
                 <button className="secondary-button danger-action" type="button" onClick={removeRequest}>

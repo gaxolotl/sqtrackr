@@ -2,7 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogIn, Search, UserPlus } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Coins,
+  Gauge,
+  LoaderCircle,
+  LogIn,
+  Search,
+  UserPlus,
+} from "lucide-react";
 import { FormEvent, useState } from "react";
 import { useAuth } from "@/components/auth-context";
 import { useI18n } from "@/components/i18n-context";
@@ -17,7 +26,7 @@ import type { DashboardData, Torrent } from "@/lib/types";
 export function HomeDashboard({ initialQuery = "" }: { initialQuery?: string }) {
   const router = useRouter();
   const [query, setQuery] = useState(initialQuery);
-  const { session } = useAuth();
+  const { session, hydrated } = useAuth();
   const { t } = useI18n();
   const { config } = useTrackerConfig();
   const { data: torrents, error, loading } = useApiData<Torrent[]>(session ? "/torrent/latest?count=25" : null);
@@ -29,6 +38,17 @@ export function HomeDashboard({ initialQuery = "" }: { initialQuery?: string }) 
     router.push(`/search?q=${encodeURIComponent(query.trim())}`);
   }
 
+  if (!hydrated) {
+    return (
+      <main className="page">
+        <div className="state-panel sign-in-panel" role="status">
+          <LoaderCircle className="spin" aria-hidden="true" />
+          <span>{t("loading")}</span>
+        </div>
+      </main>
+    );
+  }
+
   if (!session) {
     return (
       <main className="splash-page">
@@ -38,7 +58,9 @@ export function HomeDashboard({ initialQuery = "" }: { initialQuery?: string }) 
           <p>{config.siteDescription || t("tagline")}</p>
           <div className="splash-actions">
             <Link className="primary-button button-link" href="/login"><LogIn aria-hidden="true" /> {t("login")}</Link>
-            <Link className="secondary-button button-link" href="/register"><UserPlus aria-hidden="true" /> {t("register")}</Link>
+            {config.allowRegister !== "closed" ? (
+              <Link className="secondary-button button-link" href="/register"><UserPlus aria-hidden="true" /> {t("register")}</Link>
+            ) : null}
           </div>
         </div>
       </main>
@@ -73,17 +95,41 @@ export function HomeDashboard({ initialQuery = "" }: { initialQuery?: string }) 
         <ApiState loading={dashboardLoading} error={dashboardError} empty={!dashboardLoading && !dashboardError && !dashboard}>
           {dashboard ? (
             <>
-              <p>
-                Ratio <strong>{Number(dashboard.ratio ?? 0).toFixed(2)}</strong>
-                {" · "}Uploaded <strong>{formatBytes(dashboard.up ?? 0)}</strong>
-                {" · "}Downloaded <strong>{formatBytes(dashboard.down ?? 0)}</strong>
-                {" · "}Snatches <strong>{dashboard.snatches ?? 0}</strong>
-                {" · "}Hit&apos;n&apos;runs <strong>{dashboard.hitnruns ?? 0}</strong>
-                {" · "}Bonus points <strong>{dashboard.bp ?? 0}</strong>
-              </p>
-              <p>
-                Seeding <strong>{dashboard.seeding.length}</strong>
-                {" · "}Leeching <strong>{dashboard.leeching.length}</strong>
+              <div className="metric-grid home-stat-grid">
+                <article className="metric-card">
+                  <Gauge aria-hidden="true" />
+                  <div>
+                    <strong>{Number(dashboard.ratio ?? 0).toFixed(2)}</strong>
+                    <span>Ratio</span>
+                  </div>
+                </article>
+                <article className="metric-card">
+                  <ArrowUp aria-hidden="true" />
+                  <div>
+                    <strong>{formatBytes(dashboard.up ?? 0)}</strong>
+                    <span>Uploaded</span>
+                  </div>
+                </article>
+                <article className="metric-card">
+                  <ArrowDown aria-hidden="true" />
+                  <div>
+                    <strong>{formatBytes(dashboard.down ?? 0)}</strong>
+                    <span>Downloaded</span>
+                  </div>
+                </article>
+                <article className="metric-card">
+                  <Coins aria-hidden="true" />
+                  <div>
+                    <strong>{dashboard.bp ?? 0}</strong>
+                    <span>Bonus points</span>
+                  </div>
+                </article>
+              </div>
+              <p className="home-stat-summary">
+                <span>Snatches <strong>{dashboard.snatches ?? 0}</strong></span>
+                <span>Hit&apos;n&apos;runs <strong>{dashboard.hitnruns ?? 0}</strong></span>
+                <span>Seeding <strong>{dashboard.seeding.length}</strong></span>
+                <span>Leeching <strong>{dashboard.leeching.length}</strong></span>
               </p>
               {dashboard.warnings.length ? (
                 <>

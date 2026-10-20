@@ -1,9 +1,10 @@
 "use client";
 
-import { MessageSquarePlus } from "lucide-react";
+import { Mail, MessageSquarePlus } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useAuth } from "@/components/auth-context";
+import { useI18n } from "@/components/i18n-context";
 import { Pager } from "@/components/pager";
 import { ApiState, PageHeader, SignInRequired } from "@/components/ui";
 import { useApiData } from "@/hooks/use-api-data";
@@ -20,6 +21,7 @@ function truncateMessage(body: string) {
 
 export function MessagesInbox() {
   const { session } = useAuth();
+  const { t } = useI18n();
   const [page, setPage] = useState(0);
   const { data, error, loading } = useApiData<ConversationPage>(
     session ? `/messages/page/${page}` : null,
@@ -57,7 +59,7 @@ export function MessagesInbox() {
   return (
     <main className="page list-page messages-page">
       <PageHeader
-        title="Messages"
+        title={t("messages")}
         actions={
           <Link className="primary-button button-link" href="/messages/new">
             <MessageSquarePlus aria-hidden="true" /> New conversation
@@ -99,12 +101,6 @@ export function MessagesInbox() {
                     <span className="conversation-row-main">
                       <span className="conversation-row-title">
                         <strong>{title}</strong>
-                        {unreadCount ? (
-                          <span
-                            className="unread-dot"
-                            aria-label={`${unreadCount} unread messages`}
-                          />
-                        ) : null}
                       </span>
                       <span className="conversation-row-preview">
                         {lastMessage ? (
@@ -132,7 +128,10 @@ export function MessagesInbox() {
                         </time>
                       ) : null}
                       {unreadCount ? (
-                        <span className="conversation-unread-count">
+                        <span
+                          className="conversation-unread-count"
+                          aria-label={`${unreadCount} unread messages`}
+                        >
                           {unreadCount}
                         </span>
                       ) : null}
@@ -150,6 +149,7 @@ export function MessagesInbox() {
           </>
         ) : (
           <section className="messages-empty state-panel">
+            <Mail aria-hidden="true" />
             <p>
               Your inbox is empty. Start a private conversation with another
               member.

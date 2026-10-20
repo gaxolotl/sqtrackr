@@ -33,7 +33,7 @@ export function VerifyEmailPage() {
         <div className="state-panel state-error">This verification link is missing its token.</div>
       ) : (
         <ApiState loading={!result.error && !result.verified} error={result.error}>
-          <div className="state-panel">Email verified. <Link className="primary-button compact-button" href="/login">Log in</Link></div>
+          <div className="state-panel state-panel-centered">Email verified. <Link className="primary-button compact-button" href="/login">Log in</Link></div>
         </ApiState>
       )}
     </main>

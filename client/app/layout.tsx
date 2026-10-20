@@ -70,7 +70,7 @@ function configStyles(config: TrackerConfig) {
     ...(primary
       ? {
           "--accent": primary,
-          "--accent-hover": primary,
+          "--accent-hover": `color-mix(in srgb, ${primary} 85%, #fff)`,
           "--accent-soft": `color-mix(in srgb, ${primary} 12%, transparent)`,
         }
       : {}),
