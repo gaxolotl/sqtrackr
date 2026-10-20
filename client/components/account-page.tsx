@@ -3,7 +3,14 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Copy, Download, KeyRound, ShieldCheck, Ticket, Upload } from "lucide-react";
+import {
+  Copy,
+  Download,
+  KeyRound,
+  ShieldCheck,
+  Ticket,
+  Upload,
+} from "lucide-react";
 import { FormEvent, useState } from "react";
 import { useAuth } from "@/components/auth-context";
 import {
@@ -24,6 +31,7 @@ type ApiTokenMeta = {
   prefix: string;
   created: number;
   lastUsedAt?: number;
+  expiresAt?: number;
 };
 type DeviceSession = {
   id: string;
@@ -61,9 +69,7 @@ export function AccountPage() {
   const warnings = useApiData<UserWarning[]>(
     session ? "/account/warnings" : null,
   );
-  const tokens = useApiData<ApiTokenMeta[]>(
-    session ? "/account/tokens" : null,
-  );
+  const tokens = useApiData<ApiTokenMeta[]>(session ? "/account/tokens" : null);
   const devices = useApiData<{ sessions: DeviceSession[] }>(
     session ? "/account/sessions" : null,
   );
@@ -139,14 +145,17 @@ export function AccountPage() {
   async function createToken(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    const name = String(new FormData(form).get("name") ?? "").trim();
-    if (!name) return;
+    const data = new FormData(form);
+    const name = String(data.get("name") ?? "").trim();
+    const password = String(data.get("password") ?? "");
+    const totp = String(data.get("totp") ?? "");
+    if (!name || !password) return;
     setMessage("");
     setActionError("");
     try {
       const result = await apiFetch<{ token: string }>("/account/tokens", {
         method: "POST",
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, password, ...(totp ? { totp } : {}) }),
       });
       form.reset();
       setNewToken(result.token);
@@ -166,7 +175,9 @@ export function AccountPage() {
     setMessage("");
     setActionError("");
     try {
-      await apiFetch(`/account/tokens/${encodeURIComponent(id)}`, { method: "DELETE" });
+      await apiFetch(`/account/tokens/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
       setMessage("API token revoked.");
       tokens.reload();
     } catch (requestError) {
@@ -178,20 +189,28 @@ export function AccountPage() {
     }
   }
 
-  async function rotateUid() {
+  async function rotateUid(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     if (
       !window.confirm(
         "Rotate your announce key? You must re-download torrents afterwards.",
       )
     )
       return;
+    const data = new FormData(event.currentTarget);
+    const password = String(data.get("password") ?? "");
+    const totp = String(data.get("totp") ?? "");
+    if (!password) return;
     setMessage("");
     setActionError("");
     setNewAnnounceUrl(null);
     try {
       const result = await apiFetch<{ announceUrl: string }>(
         "/account/rotate-uid",
-        { method: "POST" },
+        {
+          method: "POST",
+          body: JSON.stringify({ password, ...(totp ? { totp } : {}) }),
+        },
       );
       setNewAnnounceUrl(result.announceUrl);
       setMessage("Announce key rotated. Re-download your torrents.");
@@ -217,7 +236,9 @@ export function AccountPage() {
     setMessage("");
     setActionError("");
     try {
-      await apiFetch(`/account/sessions/${encodeURIComponent(device.id)}`, { method: "DELETE" });
+      await apiFetch(`/account/sessions/${encodeURIComponent(device.id)}`, {
+        method: "DELETE",
+      });
       if (device.current) {
         void logout({ revoke: false });
         router.push("/login");
@@ -727,10 +748,7 @@ export function AccountPage() {
         ) : null}
         {backupCodes.length ? (
           <>
-            <div
-              className="backup-codes"
-              aria-label="Two-factor backup codes"
-            >
+            <div className="backup-codes" aria-label="Two-factor backup codes">
               {backupCodes.map((code) => (
                 <code key={code}>{code}</code>
               ))}
@@ -747,12 +765,7 @@ export function AccountPage() {
         {totpEnabled ? (
           <form className="inline-form" onSubmit={disableTotp}>
             <Field label="Authenticator code">
-              <input
-                name="token"
-                inputMode="numeric"
-                maxLength={6}
-                required
-              />
+              <input name="token" inputMode="numeric" maxLength={6} required />
             </Field>
             <Field label="Current password">
               <input
@@ -763,10 +776,7 @@ export function AccountPage() {
                 required
               />
             </Field>
-            <button
-              className="secondary-button danger-action"
-              type="submit"
-            >
+            <button className="secondary-button danger-action" type="submit">
               Disable 2FA
             </button>
           </form>
@@ -807,7 +817,9 @@ export function AccountPage() {
       </section>
       <section className="account-section">
         <h2>API tokens</h2>
-        <p>Tokens authenticate API requests as you. They can be revoked any time.</p>
+        <p>
+          Tokens authenticate API requests as you. They can be revoked any time.
+        </p>
         {newToken ? (
           <p>
             New token: <strong>{newToken}</strong>
@@ -824,6 +836,9 @@ export function AccountPage() {
                     {token.lastUsedAt
                       ? ` · Last used ${formatDateTime(token.lastUsedAt)}`
                       : " · Never used"}
+                    {token.expiresAt
+                      ? ` · Expires ${formatDateTime(token.expiresAt)}`
+                      : ""}
                   </p>
                 </div>
                 <button
@@ -847,6 +862,24 @@ export function AccountPage() {
             placeholder="Token name, e.g. autobrr"
             aria-label="Token name"
           />
+          <input
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            maxLength={128}
+            required
+            placeholder="Current password"
+            aria-label="Current password"
+          />
+          {totpEnabled ? (
+            <input
+              name="totp"
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="Authenticator code"
+              aria-label="Authenticator code"
+            />
+          ) : null}
           <button className="primary-button" type="submit">
             Create token
           </button>
@@ -892,8 +925,7 @@ export function AccountPage() {
                       : "Sign out"}
                   </button>
                 </article>
-              ),
-            )}
+              ))}
           </div>
         </ApiState>
         {newAnnounceUrl ? (
@@ -901,14 +933,26 @@ export function AccountPage() {
             New announce URL: <strong>{newAnnounceUrl}</strong>
           </p>
         ) : null}
-        <div className="candidate-actions">
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={rotateUid}
-          >
+        <form className="inline-form" onSubmit={rotateUid}>
+          <Field label="Current password">
+            <input
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              maxLength={128}
+              required
+            />
+          </Field>
+          {totpEnabled ? (
+            <Field label="Authenticator code">
+              <input name="totp" inputMode="numeric" maxLength={6} />
+            </Field>
+          ) : null}
+          <button className="secondary-button" type="submit">
             <Copy aria-hidden="true" /> Rotate announce key
           </button>
+        </form>
+        <div className="candidate-actions">
           <button
             className="secondary-button danger-action"
             type="button"

@@ -4,6 +4,7 @@ import User from "../schema/user.js";
 import ApiToken from "../schema/apiToken.js";
 import Session from "../schema/session.js";
 import { SESSION_TOUCH_MS } from "../utils/sessions.js";
+import { getApiTokenExpiry } from "../utils/apiTokens.js";
 
 // Constant-time comparison for the Next-SSR server secret. Length is
 // checked first because timingSafeEqual throws on mismatched lengths.
@@ -46,6 +47,15 @@ const auth = async (req, res, next) => {
           res.status(401).send("Invalid authentication token");
           return;
         }
+        if (getApiTokenExpiry(apiToken) <= Date.now()) {
+          // Expired tokens are rejected even if never explicitly revoked.
+          ApiToken.updateOne(
+            { _id: apiToken._id },
+            { $set: { revoked: true } },
+          ).catch(() => {});
+          res.status(401).send("Invalid authentication token");
+          return;
+        }
         const user = await User.findOne(
           { _id: apiToken.userId },
           { role: 1, banned: 1, banReason: 1 },
@@ -56,7 +66,10 @@ const auth = async (req, res, next) => {
         }
         if (user.banned) {
           const reason = user.banReason || "none";
-          res.status(403).type("text/plain").send(`User is banned. Reason: ${reason}`);
+          res
+            .status(403)
+            .type("text/plain")
+            .send(`User is banned. Reason: ${reason}`);
           return;
         }
         req.userId = user._id;
@@ -97,7 +110,10 @@ const auth = async (req, res, next) => {
         if (user) {
           if (user.banned) {
             const reason = user.banReason || "none";
-            res.status(403).type("text/plain").send(`User is banned. Reason: ${reason}`);
+            res
+              .status(403)
+              .type("text/plain")
+              .send(`User is banned. Reason: ${reason}`);
             return;
           }
           if (
@@ -164,7 +180,11 @@ const auth = async (req, res, next) => {
     // Server-side public reads only: writes with an undefined identity would
     // persist owner-less records, so only safe idempotent methods pass here.
     // Authenticated writes must use a real JWT/API token via Authorization.
-    if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS") {
+    if (
+      req.method !== "GET" &&
+      req.method !== "HEAD" &&
+      req.method !== "OPTIONS"
+    ) {
       res.status(401).send("Invalid authentication token");
       return;
     }

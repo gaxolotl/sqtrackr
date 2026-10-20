@@ -1,7 +1,7 @@
 "use client";
 
 import { Copy, ExternalLink, RefreshCw, Rss, ShieldAlert } from "lucide-react";
-import { useState } from "react";
+import { FormEvent, useState } from "react";
 import { useAuth } from "@/components/auth-context";
 import {
   ActionMessage,
@@ -31,6 +31,10 @@ export function RssPage() {
   const [error, setError] = useState("");
   const [regenerating, setRegenerating] = useState(false);
   const access = useApiData<RssAccess>(session ? "/account/rss-token" : null);
+  const totpStatus = useApiData<{ enabled: boolean }>(
+    session ? "/account/totp/status" : null,
+  );
+  const totpEnabled = totpStatus.data?.enabled ?? false;
   const feedUrl = (() => {
     if (!access.data?.token) return "";
     const parameters = new URLSearchParams({ token: access.data.token });
@@ -65,13 +69,18 @@ export function RssPage() {
     }
   }
 
-  async function regenerateToken() {
+  async function regenerateToken(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     if (
       !window.confirm(
         "Regenerate your RSS token? Existing feed URLs will stop working.",
       )
     )
       return;
+    const data = new FormData(event.currentTarget);
+    const password = String(data.get("password") ?? "");
+    const totp = String(data.get("totp") ?? "");
+    if (!password) return;
     setRegenerating(true);
     setError("");
     setMessage("");
@@ -80,6 +89,7 @@ export function RssPage() {
         "/account/rss-token/regenerate",
         {
           method: "POST",
+          body: JSON.stringify({ password, ...(totp ? { totp } : {}) }),
         },
       );
       access.setData(result);
@@ -158,8 +168,8 @@ export function RssPage() {
               <div>
                 <h2>Add to a feed reader</h2>
                 <p>
-                  Choose an open-source reader to copy the private URL, then
-                  add it in the reader.
+                  Choose an open-source reader to copy the private URL, then add
+                  it in the reader.
                 </p>
               </div>
               <div className="rss-reader-actions">
@@ -187,15 +197,30 @@ export function RssPage() {
                 subscription will stop working.
               </p>
             </div>
-            <button
-              className="secondary-button danger-action"
-              type="button"
-              disabled={regenerating}
-              onClick={regenerateToken}
-            >
-              <RefreshCw aria-hidden="true" />{" "}
-              {regenerating ? "Regenerating…" : "Regenerate token"}
-            </button>
+            <form className="inline-form" onSubmit={regenerateToken}>
+              <Field label="Current password">
+                <input
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  maxLength={128}
+                  required
+                />
+              </Field>
+              {totpEnabled ? (
+                <Field label="Authenticator code">
+                  <input name="totp" inputMode="numeric" maxLength={6} />
+                </Field>
+              ) : null}
+              <button
+                className="secondary-button danger-action"
+                type="submit"
+                disabled={regenerating}
+              >
+                <RefreshCw aria-hidden="true" />{" "}
+                {regenerating ? "Regenerating…" : "Regenerate token"}
+              </button>
+            </form>
           </section>
           <ActionMessage message={message} error={error} />
         </div>

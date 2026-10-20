@@ -7,6 +7,9 @@ const ApiToken = new mongoose.Schema({
   prefix: String,
   created: Number,
   lastUsedAt: Number,
+  // Absolute expiry (Unix ms). Tokens minted before expiry tracking existed
+  // are capped at 90 days from `created` by getApiTokenExpiry().
+  expiresAt: Number,
   revoked: Boolean,
 });
 

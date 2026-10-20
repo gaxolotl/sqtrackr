@@ -3,6 +3,7 @@ import User from "../schema/user.js";
 import Torrent from "../schema/torrent.js";
 import { embellishTorrentsWithTrackerScrape } from "./torrent.js";
 import { getAnnounceUrl } from "../utils/trackerUrl.js";
+import { verifyCredentialStepUp } from "./user.js";
 
 const escapeXml = (value) =>
   String(value ?? "")
@@ -171,6 +172,7 @@ export const getRssToken = async (req, res, next) => {
 
 export const regenerateRssToken = async (req, res, next) => {
   try {
+    if (!(await verifyCredentialStepUp(req, res))) return;
     const plaintext = createRssToken();
     const user = await User.findByIdAndUpdate(
       req.userId,

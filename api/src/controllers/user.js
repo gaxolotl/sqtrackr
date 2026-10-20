@@ -18,6 +18,7 @@ import { BYTES_GB } from "../tracker/announce.js";
 import { envFlag } from "../utils/env.js";
 import { isAdmin, VALID_ROLES, canModerate } from "../utils/roles.js";
 import { getContentLimits } from "../utils/contentLimits.js";
+import { API_TOKEN_TTL_MS, getApiTokenExpiry } from "../utils/apiTokens.js";
 import logAudit from "../utils/audit.js";
 import pushNotification from "../utils/notify.js";
 import { createLoginSession } from "../utils/sessions.js";
@@ -182,23 +183,46 @@ const verifyTotpStepUp = async (user, code, res) => {
 };
 
 const revokeAllUserAuth = async (userId) => {
-  await Promise.all([
+  // The announce uid is a bearer credential embedded in .torrent files,
+  // magnet links and RSS feeds. Rotate it together with sessions and API
+  // tokens so a leaked download/announce URL cannot outlive a password
+  // change, password reset, or sign-out-everywhere. Re-downloaded torrents
+  // pick up the new uid automatically; files already downloaded must be
+  // fetched again.
+  let nextUid;
+  try {
+    nextUid = await generateUniqueUid(User);
+  } catch {
+    nextUid = crypto.randomBytes(16).toString("hex");
+  }
+  const results = await Promise.allSettled([
     Session.updateMany(
       { userId, revoked: { $ne: true } },
       { $set: { revoked: true } },
-    ).catch(() => {}),
+    ),
     ApiToken.updateMany(
       { userId, revoked: { $ne: true } },
       { $set: { revoked: true } },
-    ).catch(() => {}),
+    ),
     // RSS feed URLs embed both the RSS token and the announce uid and live
     // outside the browser session, so a stolen feed URL survives password
     // changes unless it is revoked here. Clearing forces regeneration.
     User.updateOne(
       { _id: userId },
-      { $unset: { rssToken: 1, rssTokenHash: 1 } },
-    ).catch(() => {}),
+      {
+        $unset: { rssToken: 1, rssTokenHash: 1 },
+        $set: { uid: nextUid },
+      },
+    ),
   ]);
+  for (const result of results) {
+    if (result.status === "rejected") {
+      console.error(
+        "[sq] failed to revoke user credentials:",
+        result.reason?.message ?? result.reason,
+      );
+    }
+  }
 };
 
 // Re-authenticating with the current password before security-sensitive
@@ -211,10 +235,7 @@ const verifyCurrentPassword = async (req, res) => {
     res.status(400).send("Request must include password");
     return false;
   }
-  const user = await User.findOne(
-    { _id: req.userId },
-    { password: 1 },
-  ).lean();
+  const user = await User.findOne({ _id: req.userId }, { password: 1 }).lean();
   if (!user) {
     res.status(404).send("User does not exist");
     return false;
@@ -225,6 +246,20 @@ const verifyCurrentPassword = async (req, res) => {
     return false;
   }
   return true;
+};
+
+// Credential-issuing actions must not be possible with a hijacked session
+// alone: require the current password and, when enrolled, a TOTP or backup
+// code. Used by API-token creation, RSS-token regeneration and announce-key
+// rotation, all of which mint credentials that outlive the browser session.
+export const verifyCredentialStepUp = async (req, res) => {
+  if (!(await verifyCurrentPassword(req, res))) return false;
+  const user = await User.findOne({ _id: req.userId }, { totp: 1 }).lean();
+  if (!user) {
+    res.status(404).send("User does not exist");
+    return false;
+  }
+  return verifyTotpStepUp(user, req.body?.totp, res);
 };
 
 export const sendVerificationEmail = async (mail, address, token) => {
@@ -305,17 +340,17 @@ export const register = (mail) => async (req, res, next) => {
           return;
         }
 
-        if (
-          normalizeEmail(email) !==
-          normalizeEmail(req.body.email)
-        ) {
+        if (normalizeEmail(email) !== normalizeEmail(req.body.email)) {
           res
             .status(403)
             .send("Email address does not match invited email address");
           return;
         }
 
-        inviter = await User.findOne({ _id: invitingUser }, { banned: 1, role: 1 }).lean();
+        inviter = await User.findOne(
+          { _id: invitingUser },
+          { banned: 1, role: 1 },
+        ).lean();
         if (!inviter || inviter.banned) {
           res
             .status(403)
@@ -336,7 +371,10 @@ export const register = (mail) => async (req, res, next) => {
       }
     }
 
-    if (typeof req.body.username !== "string" || typeof req.body.email !== "string") {
+    if (
+      typeof req.body.username !== "string" ||
+      typeof req.body.email !== "string"
+    ) {
       res.status(400).send("Request must include email, username and password");
       return;
     }
@@ -356,6 +394,15 @@ export const register = (mail) => async (req, res, next) => {
     if (!passwordChecked) return;
 
     const normalizedUsername = req.body.username.toLowerCase();
+    // Validate the username format before the duplicate lookup. Otherwise an
+    // invalid username produces a different error only when the email is
+    // unknown, turning registration into an email-enumeration oracle.
+    if (!/^[a-z0-9.]+$/i.test(normalizedUsername)) {
+      res
+        .status(400)
+        .send("Username can only consist of letters, numbers, and “.”");
+      return;
+    }
     const created = Date.now();
     let inviteClaimed = false;
     let legacyInviteDebited = false;
@@ -370,13 +417,6 @@ export const register = (mail) => async (req, res, next) => {
       );
 
       if (!user) {
-        if (!/^[a-z0-9.]+$/i.test(normalizedUsername)) {
-          res
-            .status(400)
-            .send("Username can only consist of letters, numbers, and “.”");
-          return;
-        }
-
         const hash = await bcrypt.hash(passwordChecked, 10);
         if (invite) {
           const claimedInvite = await Invite.findOneAndUpdate(
@@ -865,14 +905,25 @@ export const initiatePasswordReset = (mail) => async (req, res, next) => {
       );
 
       if (!envFlag("SQ_DISABLE_EMAIL")) {
-        await mail.sendMail({
-          from: `"${process.env.SQ_SITE_NAME}" <${process.env.SQ_MAIL_FROM_ADDRESS}>`,
-          to: user.email,
-          subject: "Password reset",
-          text: `Please follow the link below to reset your password.
+        // Do not await SMTP delivery: the unknown-email path returns
+        // immediately, so awaiting here would leak account existence through
+        // response timing (and through a 500 when the mail server fails).
+        // Delivery errors are logged server-side only.
+        void mail
+          .sendMail({
+            from: `"${process.env.SQ_SITE_NAME}" <${process.env.SQ_MAIL_FROM_ADDRESS}>`,
+            to: user.email,
+            subject: "Password reset",
+            text: `Please follow the link below to reset your password.
         
 ${process.env.SQ_BASE_URL}/reset-password/finalise?token=${token}`,
-        });
+          })
+          .catch((error) => {
+            console.error(
+              "[sq] failed to send password reset email:",
+              error?.message ?? error,
+            );
+          });
       }
 
       res.sendStatus(200);
@@ -1352,7 +1403,9 @@ export const getDashboard = async (req, res, next) => {
       name: names.get(snatch.infoHash) ?? snatch.infoHash,
     }));
     const warnings = withNames
-      .filter((snatch) => !snatch.isHnr && !snatch.ratioOk && !snatch.seededEnough)
+      .filter(
+        (snatch) => !snatch.isHnr && !snatch.ratioOk && !snatch.seededEnough,
+      )
       .sort((a, b) => a.graceEndsAt - b.graceEndsAt)
       .slice(0, 10);
     const currentHnrs = withNames
@@ -1396,8 +1449,12 @@ export const getSavedSearches = async (req, res, next) => {
 
 export const saveSearch = async (req, res, next) => {
   try {
-    const name = String(req.body?.name ?? "").trim().slice(0, 100);
-    const query = String(req.body?.query ?? "").trim().slice(0, 200);
+    const name = String(req.body?.name ?? "")
+      .trim()
+      .slice(0, 100);
+    const query = String(req.body?.query ?? "")
+      .trim()
+      .slice(0, 200);
     if (!name || !query) {
       res.status(400).send("Name and query are required");
       return;
@@ -1466,10 +1523,15 @@ export const getUserRole = async (req, res, next) => {
 export const listApiTokens = async (req, res, next) => {
   try {
     const tokens = await ApiToken.find({ userId: req.userId, revoked: false })
-      .select("name prefix created lastUsedAt")
+      .select("name prefix created lastUsedAt expiresAt")
       .sort({ created: -1 })
       .lean();
-    res.json(tokens);
+    res.json(
+      tokens.map((token) => ({
+        ...token,
+        expiresAt: getApiTokenExpiry(token),
+      })),
+    );
   } catch (e) {
     next(e);
   }
@@ -1477,7 +1539,10 @@ export const listApiTokens = async (req, res, next) => {
 
 export const createApiToken = async (req, res, next) => {
   try {
-    const name = String(req.body?.name ?? "").trim().slice(0, 100);
+    if (!(await verifyCredentialStepUp(req, res))) return;
+    const name = String(req.body?.name ?? "")
+      .trim()
+      .slice(0, 100);
     if (!name) {
       res.status(400).send("A token name is required");
       return;
@@ -1492,19 +1557,23 @@ export const createApiToken = async (req, res, next) => {
     }
     const raw = `sq_${crypto.randomBytes(24).toString("hex")}`;
     const tokenHash = crypto.createHash("sha256").update(raw).digest("hex");
-    const created = await new ApiToken({
+    const created = Date.now();
+    const expiresAt = created + API_TOKEN_TTL_MS;
+    const token = await new ApiToken({
       userId: req.userId,
       name,
       tokenHash,
       prefix: raw.slice(0, 11),
-      created: Date.now(),
+      created,
+      expiresAt,
       revoked: false,
     }).save();
     res.status(200).json({
-      _id: created._id,
+      _id: token._id,
       name,
-      prefix: created.prefix,
-      created: created.created,
+      prefix: token.prefix,
+      created: token.created,
+      expiresAt: token.expiresAt,
       token: raw,
     });
   } catch (e) {
@@ -1535,6 +1604,7 @@ export const revokeApiToken = async (req, res, next) => {
 
 export const rotateAnnounceUid = async (req, res, next) => {
   try {
+    if (!(await verifyCredentialStepUp(req, res))) return;
     let uid = "";
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const candidate = crypto.randomBytes(16).toString("hex");
@@ -1591,9 +1661,7 @@ export const listSessions = async (req, res, next) => {
       .limit(50)
       .lean();
     res.json({
-      sessions: sessions.map((session) =>
-        sessionDto(session, req.sessionId),
-      ),
+      sessions: sessions.map((session) => sessionDto(session, req.sessionId)),
     });
   } catch (e) {
     next(e);
@@ -1944,7 +2012,9 @@ export const issueWarning = async (req, res, next) => {
       res.status(403).send("You do not have permission to warn users");
       return;
     }
-    const reason = String(req.body?.reason ?? "").trim().slice(0, 2000);
+    const reason = String(req.body?.reason ?? "")
+      .trim()
+      .slice(0, 2000);
     if (!reason) {
       res.status(400).send("A reason is required");
       return;
@@ -2036,7 +2106,9 @@ export const appealWarning = async (req, res, next) => {
       res.status(404).send("Warning does not exist");
       return;
     }
-    const text = String(req.body?.text ?? "").trim().slice(0, 2000);
+    const text = String(req.body?.text ?? "")
+      .trim()
+      .slice(0, 2000);
     if (!text) {
       res.status(400).send("Appeal text is required");
       return;
@@ -2111,10 +2183,7 @@ export const enableTotp = async (req, res, next) => {
   if (typeof req.body.token === "string" && req.body.token) {
     try {
       if (!(await verifyCurrentPassword(req, res))) return;
-      const user = await User.findOne(
-        { _id: req.userId },
-        { totp: 1 },
-      ).lean();
+      const user = await User.findOne({ _id: req.userId }, { totp: 1 }).lean();
       if (user?.totp?.enabled) {
         res.status(409).send("TOTP already enabled");
         return;
@@ -2159,10 +2228,7 @@ export const disableTotp = async (req, res, next) => {
   if (typeof req.body.token === "string" && req.body.token) {
     try {
       if (!(await verifyCurrentPassword(req, res))) return;
-      const user = await User.findOne(
-        { _id: req.userId },
-        { totp: 1 },
-      ).lean();
+      const user = await User.findOne({ _id: req.userId }, { totp: 1 }).lean();
 
       const validToken = speakeasy.totp.verify({
         secret: user?.totp?.secret,
