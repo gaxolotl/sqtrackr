@@ -18,7 +18,7 @@
   },
   "devDependencies": {
     "@types/react": "19.2.18",
-    "next": "16.4.1",
+    "next": "16.4.5",
     "react": "19.2.8"
   }
 }
